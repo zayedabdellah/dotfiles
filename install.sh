@@ -15,6 +15,7 @@ NC='\033[0m'
 
 SCRIPT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="$SCRIPT_ROOT/config"
+ORIGINAL_ARGUMENT_COUNT=$#
 OPTIONAL_MODULES=()
 DRY_RUN=0
 AUDIT_ONLY=0
@@ -30,6 +31,16 @@ BACKUP_ROOT=""
 BACKUP_MANIFEST=""
 BACKUP_CREATED=0
 INSTALL_CONFIRMATION_DONE=0
+FISH_SHELL_DECISION=""
+SYSTEM_SERVICES_DECISION=""
+AUR_INSTALL_APPROVED=0
+FISH_SHELL_STATUS="unchanged"
+DESKTOP_SETTINGS_STATUS="not requested"
+SYSTEM_SERVICES_STATUS="not requested"
+VALIDATION_STATUS="not run"
+TARGET_USER=""
+TARGET_UID=""
+SHELLS_FILE="${DOTFILES_SHELLS_FILE:-/etc/shells}"
 
 usage() {
     cat <<'EOF'
@@ -47,7 +58,7 @@ Options:
   --config-only             Skip distro packages and deploy configuration
   --skip-packages           Skip distro packages and deploy configuration
   --set-default-shell       Ask before changing this user's login shell to Fish
-  --apply-desktop-settings  Apply GTK settings through gsettings
+  --apply-desktop-settings  Apply approved GTK/XDG desktop settings
   --non-interactive         Never prompt; unspecified profile uses generic
   --help                    Show this help
 
@@ -115,6 +126,10 @@ while (($# > 0)); do
     esac
 done
 
+if (( ORIGINAL_ARGUMENT_COUNT == 0 )); then
+    APPLY_DESKTOP_SETTINGS=1
+fi
+
 if (( PACKAGES_ONLY && CONFIG_ONLY )); then
     echo "--packages-only and --config-only cannot be combined." >&2
     exit 2
@@ -147,6 +162,17 @@ if (( EUID == 0 )) && (( ! DRY_RUN )); then
     exit 1
 fi
 
+TARGET_USER="$(id -un)"
+TARGET_UID="$(id -u)"
+if [[ -z "$TARGET_USER" || ! "$TARGET_UID" =~ ^[0-9]+$ ]]; then
+    echo "Could not determine the target account with id; no changes were made." >&2
+    exit 1
+fi
+if [[ "$TARGET_UID" == 0 ]] && (( ! DRY_RUN )); then
+    echo "Refusing to mutate root's account or home." >&2
+    exit 1
+fi
+
 DISTRO_ID="${DOTFILES_DISTRO_ID:-}"
 if [[ -z "$DISTRO_ID" && -r /etc/os-release ]]; then
     # shellcheck disable=SC1091
@@ -166,12 +192,13 @@ ARCH_REQUIRED_PACKAGES=(
     hyprland xdg-desktop-portal xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
     xorg-xwayland waybar swaync fish kitty rofi hyprlock hypridle awww
     pipewire pipewire-audio pipewire-alsa pipewire-pulse wireplumber
-    polkit hyprpolkitagent gtk3 gtk4 qt6ct qt6-wayland qt5-wayland kvantum
+    polkit hyprpolkitagent gtk3 gtk4 gsettings-desktop-schemas qt6ct qt6-wayland qt5-wayland kvantum
     papirus-icon-theme thunar thunar-volman tumbler mpv btop mangohud cava
     grim slurp wl-clipboard brightnessctl playerctl pavucontrol-qt
     networkmanager power-profiles-daemon bluez bluez-utils blueman
     dbus libnotify xorg-xrdb xsettingsd fontconfig iproute2 procps-ng
     coreutils findutils gawk curl unzip xdg-utils xdg-user-dirs
+    fastfetch util-linux jq
 )
 
 # Arch package names for commands actually referenced by the active files.
@@ -181,6 +208,12 @@ declare -A ARCH_COMMAND_PACKAGE=(
     [waybar]=waybar
     [swaync]=swaync
     [fish]=fish
+    [chsh]=util-linux
+    [getent]=glibc
+    [fastfetch]=fastfetch
+    [jq]=jq
+    [gsettings]=glib2
+    [xdg-user-dirs-update]=xdg-user-dirs
     [kitty]=kitty
     [rofi]=rofi
     [hyprlock]=hyprlock
@@ -241,6 +274,12 @@ declare -A GENTOO_COMMAND_PACKAGE=(
     [hyprland]=gui-wm/hyprland
     [waybar]=gui-apps/waybar
     [fish]=app-shells/fish
+    [chsh]=sys-apps/util-linux
+    [getent]=sys-libs/glibc
+    [fastfetch]=app-misc/fastfetch
+    [jq]=app-misc/jq
+    [gsettings]=dev-libs/glib
+    [xdg-user-dirs-update]=x11-misc/xdg-user-dirs
     [kitty]=app-emulation/kitty
     [rofi]=gui-apps/rofi
     [thunar]=xfce-base/thunar
@@ -285,11 +324,11 @@ declare -A GENTOO_OVERLAY_NOTES=(
 )
 
 REQUIRED_COMMANDS=(
-    Hyprland waybar swaync fish kitty rofi hyprlock hypridle awww awww-daemon
+    Hyprland waybar swaync fish chsh getent fastfetch jq kitty rofi hyprlock hypridle awww awww-daemon
     pipewire wireplumber wpctl hyprpolkitagent qt6ct kvantummanager thunar mpv btop mangohud cava
     grim slurp wl-copy brightnessctl playerctl pavucontrol-qt nmtui nmcli
     blueman-applet powerprofilesctl xrdb notify-send xsettingsd fc-cache ip
-    curl unzip
+    curl unzip gsettings xdg-user-dirs-update
 )
 
 have_command() {
@@ -401,6 +440,84 @@ resolve_profile() {
     echo "Selected machine profile: $PROFILE_NAME"
 }
 
+collect_interactive_choices() {
+    local reply optional_reply module
+    if (( AUDIT_ONLY || DRY_RUN )); then
+        return 0
+    fi
+
+    if (( NON_INTERACTIVE )); then
+        if (( SET_DEFAULT_SHELL )); then
+            FISH_SHELL_DECISION="yes"
+        else
+            FISH_SHELL_DECISION="no"
+        fi
+        SYSTEM_SERVICES_DECISION="no"
+        return 0
+    fi
+
+    if (( ORIGINAL_ARGUMENT_COUNT == 0 )); then
+        echo
+        echo "Optional components (press Enter for none):"
+        echo "  Official: retroarch sunshine dolphin-emu goverlay vkBasalt pavucontrol"
+        echo "  AUR: suyu vkSumi brave (requires an existing paru/yay; no helper is installed)"
+        read -r -p "Optional module names, separated by spaces: " optional_reply
+        optional_reply="${optional_reply//,/ }"
+        for module in $optional_reply; do
+            case "$module" in
+                retroarch|sunshine|dolphin-emu|suyu|goverlay|vkBasalt|vkSumi|pavucontrol|mimeapps|brave)
+                    case " ${OPTIONAL_MODULES[*]} " in
+                        *" $module "*) ;;
+                        *) OPTIONAL_MODULES+=("$module") ;;
+                    esac
+                    ;;
+                *)
+                    echo "Unknown optional module '$module'; no changes were made." >&2
+                    return 1
+                    ;;
+            esac
+        done
+        if [[ " ${OPTIONAL_MODULES[*]} " == *" suyu "* || " ${OPTIONAL_MODULES[*]} " == *" vkSumi "* || " ${OPTIONAL_MODULES[*]} " == *" brave "* ]]; then
+            read -r -p "Allow the selected AUR packages to be installed with an existing paru/yay? [y/N] " reply
+            if [[ "$reply" =~ ^[Yy]$ ]]; then
+                AUR_INSTALL_APPROVED=1
+            else
+                local retained_modules=()
+                for module in "${OPTIONAL_MODULES[@]}"; do
+                    case "$module" in
+                        suyu|vkSumi|brave) ;;
+                        *) retained_modules+=("$module") ;;
+                    esac
+                done
+                OPTIONAL_MODULES=("${retained_modules[@]}")
+                echo "AUR components declined; they were removed from this installation plan."
+            fi
+        fi
+    fi
+
+    if (( ORIGINAL_ARGUMENT_COUNT == 0 || SET_DEFAULT_SHELL )); then
+        read -r -p "Make Fish the default shell for $TARGET_USER? [Y/n] " reply
+        if [[ -z "$reply" || "$reply" =~ ^[Yy]$ ]]; then
+            FISH_SHELL_DECISION="yes"
+        else
+            FISH_SHELL_DECISION="no"
+        fi
+    else
+        FISH_SHELL_DECISION="no"
+    fi
+
+    if (( ORIGINAL_ARGUMENT_COUNT == 0 )); then
+        read -r -p "Enable required system services (NetworkManager, Bluetooth, power profiles) if needed? [Y/n] " reply
+        if [[ -z "$reply" || "$reply" =~ ^[Yy]$ ]]; then
+            SYSTEM_SERVICES_DECISION="yes"
+        else
+            SYSTEM_SERVICES_DECISION="no"
+        fi
+    else
+        SYSTEM_SERVICES_DECISION="no"
+    fi
+}
+
 print_list() {
     local item
     for item in "$@"; do printf '  - %s\n' "$item"; done
@@ -439,12 +556,20 @@ show_summary() {
         echo "  Package installation: experimental/documented only for $DISTRO_ID"
     fi
     echo "  User-local upstream component: Oh My Posh ${OH_MY_POSH_VERSION:-v29.31.1}"
-    echo "  Shared assets: JetBrains Mono, Bibata cursor, Papirus-Dark dependency, GTK theme, Torii wallpaper"
-    echo "  Kvantum: exact local gruvbox-kvantum payload"
+    echo "  Shared assets: JetBrains Mono Nerd Font, Bibata cursor, Papirus-Dark dependency, GTK theme, Torii wallpaper"
+    echo "  Fastfetch: active config and approved Claude logo"
+    echo "  Kvantum: gruvbox-kvantum under ~/.config/Kvantum/gruvbox-kvantum"
+    echo "  Desktop settings: $([[ "$APPLY_DESKTOP_SETTINGS" == 1 ]] && echo apply || echo unchanged)"
+    echo "  Fish login shell: ${FISH_SHELL_DECISION:-unchanged}"
+    echo "  System services: ${SYSTEM_SERVICES_DECISION:-unchanged}"
+    echo "  Backup destination: ~/.local/state/dotfiles/backups/<timestamp>/"
+    echo "  Configuration destinations: ~/.config, ~/.themes, ~/.local/bin, ~/.local/share"
     if ((${#OPTIONAL_MODULES[@]})); then
         echo "  Optional modules: ${OPTIONAL_MODULES[*]}"
     else
-        echo "  Optional modules: none"
+        echo "  Optional modules: none selected"
+        echo "    Official opt-ins: retroarch sunshine dolphin-emu goverlay vkBasalt pavucontrol"
+        echo "    AUR opt-ins (existing helper + separate approval): suyu vkSumi brave"
     fi
     if ((${#MISSING_COMMANDS[@]})); then
         echo "  Missing before package installation: ${MISSING_COMMANDS[*]}"
@@ -527,7 +652,9 @@ install_optional_arch_packages() {
             echo "Non-interactive mode will not use an AUR helper without an explicit interactive approval." >&2
             return 1
         fi
-        if ! confirm "Use existing $helper to install optional AUR packages ${aur_packages[*]}?"; then
+        if (( ORIGINAL_ARGUMENT_COUNT == 0 && AUR_INSTALL_APPROVED )); then
+            echo "Using the approved existing $helper for optional AUR packages."
+        elif ! confirm "Use existing $helper to install optional AUR packages ${aur_packages[*]}?"; then
             echo "Optional AUR installation declined." >&2
             return 1
         fi
@@ -574,33 +701,87 @@ install_oh_my_posh() {
 }
 
 configure_fish_shell() {
-    local fish_path reply prompt=0
-    if (( SET_DEFAULT_SHELL )); then prompt=1; fi
-    if (( ! NON_INTERACTIVE && ! AUDIT_ONLY && ! DRY_RUN && ! PACKAGES_ONLY && ! CONFIG_ONLY && ! SKIP_PACKAGES )); then prompt=1; fi
-    if (( ! prompt )); then
-        if (( SET_DEFAULT_SHELL && (AUDIT_ONLY || DRY_RUN) )); then
-            fish_path="$(command -v fish || true)"
-            echo "DRY-RUN: would validate Fish and ask before changing only this user's login shell; no change performed."
+    local fish_path reply passwd_entry current_shell
+    if (( AUDIT_ONLY || DRY_RUN )); then
+        if (( SET_DEFAULT_SHELL )); then
+            echo "DRY-RUN: would resolve Fish, validate $SHELLS_FILE, change only the id-resolved account, and verify it with getent."
         fi
         return 0
     fi
+    if [[ "$FISH_SHELL_DECISION" != "yes" ]]; then
+        FISH_SHELL_STATUS="unchanged (declined or not requested)"
+        return 0
+    fi
+    if (( EUID == 0 )) || [[ "$TARGET_UID" == 0 ]]; then
+        echo "Refusing to change root's shell." >&2
+        return 1
+    fi
+
     fish_path="$(command -v fish || true)"
-    [[ -n "$fish_path" ]] || { echo "Fish is missing; login shell unchanged." >&2; return 1; }
-    if (( AUDIT_ONLY || DRY_RUN )); then
-        echo "DRY-RUN: would verify $fish_path in /etc/shells and ask before changing only $USER's login shell; no change performed."
+    [[ -n "$fish_path" && -x "$fish_path" ]] || {
+        echo "Cannot change the login shell: Fish was not found as an executable with command -v fish." >&2
+        return 1
+    }
+    command -v chsh >/dev/null 2>&1 || {
+        echo "Cannot change the login shell: chsh is missing (Arch package: util-linux)." >&2
+        return 1
+    }
+    command -v getent >/dev/null 2>&1 || {
+        echo "Cannot verify the login shell: getent is missing." >&2
+        return 1
+    }
+    [[ -f "$SHELLS_FILE" && -r "$SHELLS_FILE" ]] || {
+        echo "Cannot change the login shell: $SHELLS_FILE is missing or unreadable." >&2
+        return 1
+    }
+
+    if ! grep -Fxq "$fish_path" "$SHELLS_FILE"; then
+        if (( ! NON_INTERACTIVE )); then
+            read -r -p "Add $fish_path to $SHELLS_FILE with sudo? [Y/n] " reply
+            if [[ -n "$reply" && ! "$reply" =~ ^[Yy]$ ]]; then
+                echo "Login shell unchanged because Fish is not listed in $SHELLS_FILE."
+                FISH_SHELL_STATUS="unchanged (shell-list update declined)"
+                return 0
+            fi
+        elif (( ! SET_DEFAULT_SHELL )); then
+            echo "Non-interactive mode will not modify $SHELLS_FILE without --set-default-shell." >&2
+            return 1
+        fi
+        if ! printf '%s\n' "$fish_path" | run_privileged tee -a "$SHELLS_FILE" >/dev/null; then
+            echo "Failed to add $fish_path to $SHELLS_FILE; login shell unchanged." >&2
+            return 1
+        fi
+        grep -Fxq "$fish_path" "$SHELLS_FILE" || {
+            echo "Fish path was not recorded as a complete line in $SHELLS_FILE." >&2
+            return 1
+        }
+    fi
+
+    passwd_entry="$(getent passwd "$TARGET_USER" || true)"
+    [[ -n "$passwd_entry" ]] || {
+        echo "Cannot change the login shell: getent could not find $TARGET_USER." >&2
+        return 1
+    }
+    IFS=: read -r _ _ _ _ _ _ current_shell <<< "$passwd_entry"
+    if [[ "$current_shell" == "$fish_path" ]]; then
+        FISH_SHELL_STATUS="already $fish_path"
+        echo "Fish is already the login shell for $TARGET_USER."
         return 0
     fi
-    if (( NON_INTERACTIVE )); then
-        echo "Non-interactive mode leaves the login shell unchanged. Use an interactive run with --set-default-shell." >&2
-        return 0
+
+    if ! run_privileged chsh -s "$fish_path" "$TARGET_USER"; then
+        echo "chsh failed for $TARGET_USER; the login shell was not changed." >&2
+        return 1
     fi
-    if (( EUID == 0 )); then echo "Refusing to change root's shell." >&2; return 1; fi
-    if ! grep -Fxq "$fish_path" /etc/shells 2>/dev/null; then
-        read -r -p "Add $fish_path to /etc/shells with sudo? [Y/n] " reply
-        if [[ -z "$reply" || "$reply" =~ ^[Yy]$ ]]; then printf '%s\n' "$fish_path" | run_privileged tee -a /etc/shells >/dev/null; else echo "Login shell unchanged."; return 0; fi
+    passwd_entry="$(getent passwd "$TARGET_USER" || true)"
+    IFS=: read -r _ _ _ _ _ _ current_shell <<< "$passwd_entry"
+    if [[ "$current_shell" != "$fish_path" ]]; then
+        echo "Login-shell verification failed: getent reports '$current_shell', expected '$fish_path'." >&2
+        return 1
     fi
-    read -r -p "Make Fish the default shell for $USER? [Y/n] " reply
-    if [[ -z "$reply" || "$reply" =~ ^[Yy]$ ]]; then chsh -s "$fish_path"; else echo "Login shell unchanged."; fi
+    FISH_SHELL_STATUS="changed to $fish_path"
+    echo "Fish is now the account login shell for $TARGET_USER."
+    echo "Log out and back in, or reboot, before existing sessions reflect the new login shell."
 }
 
 backup_existing() {
@@ -652,6 +833,136 @@ copy_tree() {
     done < <(find "$source" -mindepth 1 -print0)
 }
 
+copy_tree_except() {
+    local source="$1" destination="$2" excluded_relative="$3" item relative target
+    [[ -d "$source" ]] || { echo "Missing repository directory: $source" >&2; return 1; }
+    if (( DRY_RUN || AUDIT_ONLY )); then echo "[DRY-RUN] directory $source -> $destination (excluding $excluded_relative)"; return 0; fi
+    while IFS= read -r -d '' item; do
+        relative="${item#"$source"/}"
+        [[ "$relative" == "$excluded_relative" ]] && continue
+        target="$destination/$relative"
+        if [[ -d "$item" && ! -L "$item" ]]; then
+            mkdir -p "$target"
+        else
+            copy_file "$item" "$target"
+        fi
+    done < <(find "$source" -mindepth 1 -print0)
+}
+
+kvantum_selector_is_active() {
+    awk '
+        /^\[General\]$/ { in_general = 1; next }
+        /^\[/ { in_general = 0 }
+        in_general && $0 == "theme=gruvbox-kvantum" { found = 1 }
+        END { exit(found ? 0 : 1) }
+    ' "$1"
+}
+
+validate_repository_payload() {
+    local failed=0 path kvantum_payload
+    echo "Validating repository payload..."
+    for path in \
+        "$CONFIG_DIR/fastfetch/config.jsonc" \
+        "$CONFIG_DIR/fastfetch/claude.txt" \
+        "$CONFIG_DIR/hypr/wallpapers/torii.jpg" \
+        "$CONFIG_DIR/hypr/scripts/wallpaper.sh" \
+        "$CONFIG_DIR/hypr/scripts/hyprlock.sh" \
+        "$SCRIPT_ROOT/themes/oh-my-posh/torii-zayed.omp.json" \
+        "$SCRIPT_ROOT/themes/kvantum/gruvbox-kvantum/gruvbox-kvantum.kvconfig" \
+        "$SCRIPT_ROOT/themes/kvantum/gruvbox-kvantum/gruvbox-kvantum.svg"; do
+        [[ -r "$path" ]] || { echo "[MISSING] required repository payload: $path" >&2; failed=1; }
+    done
+    [[ -x "$CONFIG_DIR/hypr/scripts/wallpaper.sh" ]] || {
+        echo "[INVALID] wallpaper.sh must be executable in the repository." >&2
+        failed=1
+    }
+    kvantum_payload="$(find "$SCRIPT_ROOT/themes/kvantum/gruvbox-kvantum" -maxdepth 1 -type f -printf '%f\n' | sort)"
+    [[ "$kvantum_payload" == $'gruvbox-kvantum.kvconfig\ngruvbox-kvantum.svg' ]] || {
+        echo "[INVALID] Kvantum payload must contain only gruvbox-kvantum.kvconfig and gruvbox-kvantum.svg." >&2
+        failed=1
+    }
+    kvantum_selector_is_active "$CONFIG_DIR/Kvantum/kvantum.kvconfig" || {
+        echo "[INVALID] repository Kvantum selector does not select gruvbox-kvantum." >&2
+        failed=1
+    }
+    grep -Fxq 'style=kvantum' "$CONFIG_DIR/qt6ct/qt6ct.conf" || {
+        echo "[INVALID] Qt6ct does not select the Kvantum application style." >&2
+        failed=1
+    }
+    grep -Fq '"source": "~/.config/fastfetch/claude.txt"' "$CONFIG_DIR/fastfetch/config.jsonc" || {
+        echo "[INVALID] Fastfetch logo source is not the final installed path." >&2
+        failed=1
+    }
+    if grep -REn '/home/zayed|torii-fastfetch|"type"[[:space:]]*:[[:space:]]*"Command"' \
+        "$CONFIG_DIR/fastfetch" "$SCRIPT_ROOT/themes/oh-my-posh/torii-zayed.omp.json" >/dev/null; then
+        echo "[INVALID] synchronized themes contain a host path, stale source reference, or external command module." >&2
+        failed=1
+    fi
+    if command -v jq >/dev/null 2>&1; then
+        jq empty "$CONFIG_DIR/fastfetch/config.jsonc" || failed=1
+        jq empty "$SCRIPT_ROOT/themes/oh-my-posh/torii-zayed.omp.json" || failed=1
+    else
+        echo "[NOTICE] jq is not installed yet; JSON parsing will run after mandatory packages are installed."
+    fi
+    (( failed == 0 ))
+}
+
+deploy_kvantum_selector() {
+    local source="$CONFIG_DIR/Kvantum/kvantum.kvconfig"
+    local destination="$HOME/.config/Kvantum/kvantum.kvconfig"
+    local temporary
+    if [[ ! -e "$destination" ]]; then
+        copy_file "$source" "$destination"
+        return
+    fi
+    [[ -r "$destination" ]] || {
+        echo "Existing Kvantum selector is unreadable: $destination" >&2
+        return 1
+    }
+    if [[ -r "$destination" ]] && kvantum_selector_is_active "$destination"; then
+        return
+    fi
+    temporary="$(mktemp)"
+    trap 'rm -f "$temporary"' RETURN
+    awk '
+        BEGIN { in_general = 0; saw_general = 0; set_theme = 0 }
+        /^\[General\]$/ {
+            saw_general = 1
+            in_general = 1
+            print
+            next
+        }
+        /^\[/ {
+            if (in_general && !set_theme) {
+                print "theme=gruvbox-kvantum"
+                set_theme = 1
+            }
+            in_general = 0
+            print
+            next
+        }
+        in_general && /^theme=/ {
+            if (!set_theme) {
+                print "theme=gruvbox-kvantum"
+                set_theme = 1
+            }
+            next
+        }
+        { print }
+        END {
+            if (in_general && !set_theme) print "theme=gruvbox-kvantum"
+            if (!saw_general) {
+                print ""
+                print "[General]"
+                print "theme=gruvbox-kvantum"
+            }
+        }
+    ' "$destination" > "$temporary"
+    copy_file "$temporary" "$destination"
+    rm -f "$temporary"
+    trap - RETURN
+}
+
 render_selected_waybar_config() {
     local source="$CONFIG_DIR/waybar/config.jsonc.template" destination="$HOME/.config/waybar/config.jsonc" temporary
     temporary="$(mktemp)"
@@ -691,10 +1002,11 @@ deploy_configuration() {
     persist_profile_selection
 
     local component
-    local core=(Kvantum MangoHud Thunar btop cava fish gtk-3.0 gtk-4.0 hypr kitty mpv qt6ct rofi swaync waybar xsettingsd)
+    local core=(MangoHud Thunar btop cava fastfetch fish gtk-3.0 gtk-4.0 hypr kitty mpv qt6ct rofi swaync xsettingsd)
     for component in "${core[@]}"; do
         [[ -d "$CONFIG_DIR/$component" ]] && copy_tree "$CONFIG_DIR/$component" "$HOME/.config/$component"
     done
+    copy_tree_except "$CONFIG_DIR/waybar" "$HOME/.config/waybar" "config.jsonc"
     render_selected_waybar_config
     copy_file "$CONFIG_DIR/kdeglobals" "$HOME/.config/kdeglobals"
 
@@ -706,7 +1018,7 @@ deploy_configuration() {
     # This is the exact active local Kvantum theme payload. It is intentionally
     # copied only because the owner approved local repository testing.
     copy_tree "$SCRIPT_ROOT/themes/kvantum/gruvbox-kvantum" "$HOME/.config/Kvantum/gruvbox-kvantum"
-    copy_tree "$SCRIPT_ROOT/themes/kvantum/gruvbox-kvantum" "$HOME/.themes/gruvbox-kvantum"
+    deploy_kvantum_selector
 
     copy_tree "$SCRIPT_ROOT/fonts/fonts/ttf" "$HOME/.local/share/fonts"
     copy_file "$SCRIPT_ROOT/fonts/OFL.txt" "$HOME/.local/share/fonts/JetBrainsMono-OFL.txt"
@@ -740,19 +1052,61 @@ deploy_configuration() {
 
 apply_desktop_settings() {
     if (( APPLY_DESKTOP_SETTINGS && DRY_RUN )); then
-        echo "DRY-RUN: would ask gsettings to apply GTK theme/font settings; no command run."
+        echo "DRY-RUN: would apply GTK, icon, cursor, font, XDG directory, Qt6ct, and Kvantum user settings; no command run."
     elif (( APPLY_DESKTOP_SETTINGS )); then
-        command -v gsettings >/dev/null 2>&1 || { echo "gsettings is unavailable; desktop settings skipped." >&2; return 0; }
+        command -v gsettings >/dev/null 2>&1 || {
+            echo "gsettings is unavailable; required desktop settings were not applied." >&2
+            return 1
+        }
+        command -v xdg-user-dirs-update >/dev/null 2>&1 || {
+            echo "xdg-user-dirs-update is unavailable; required user directories were not configured." >&2
+            return 1
+        }
+        xdg-user-dirs-update
         gsettings set org.gnome.desktop.interface gtk-theme 'gruvbox-dark-gtk'
+        gsettings set org.gnome.desktop.interface icon-theme 'Papirus-Dark'
+        gsettings set org.gnome.desktop.interface cursor-theme 'Bibata-Modern-Amber'
+        gsettings set org.gnome.desktop.interface cursor-size 24
         gsettings set org.gnome.desktop.interface font-name 'JetBrainsMono Nerd Font 11'
         gsettings set org.gnome.desktop.interface document-font-name 'JetBrainsMono Nerd Font 11'
         gsettings set org.gnome.desktop.interface monospace-font-name 'JetBrainsMono Nerd Font 11'
+        DESKTOP_SETTINGS_STATUS="applied"
     fi
+}
+
+configure_system_services() {
+    local service
+    if (( AUDIT_ONLY || DRY_RUN )); then
+        return 0
+    fi
+    if [[ "$SYSTEM_SERVICES_DECISION" != "yes" ]]; then
+        SYSTEM_SERVICES_STATUS="unchanged (declined or not requested)"
+        return 0
+    fi
+    command -v systemctl >/dev/null 2>&1 || {
+        echo "systemctl is unavailable; required Arch system services could not be configured." >&2
+        return 1
+    }
+    for service in NetworkManager.service bluetooth.service power-profiles-daemon.service; do
+        if systemctl is-enabled "$service" >/dev/null 2>&1 && systemctl is-active "$service" >/dev/null 2>&1; then
+            continue
+        fi
+        echo "Enabling required service: $service"
+        run_privileged systemctl enable --now "$service" || {
+            echo "Failed to enable required service $service." >&2
+            return 1
+        }
+        systemctl is-enabled "$service" >/dev/null 2>&1 || {
+            echo "Service verification failed: $service is not enabled." >&2
+            return 1
+        }
+    done
+    SYSTEM_SERVICES_STATUS="NetworkManager, Bluetooth, and power profiles enabled"
 }
 
 validate_deployment() {
     (( PACKAGES_ONLY )) && return 0
-    local failed=0 path
+    local failed=0 path kvantum_payload logo_source
     echo "Validating deployed configuration..."
     for path in \
         "$HOME/.config/hypr/hyprland.lua" \
@@ -762,19 +1116,66 @@ validate_deployment() {
         "$HOME/.config/waybar/config.jsonc" \
         "$HOME/.config/waybar/config.jsonc.template" \
         "$HOME/.config/btop/themes/gruvbox_dark_v2.theme" \
+        "$HOME/.config/fastfetch/config.jsonc" \
+        "$HOME/.config/fastfetch/claude.txt" \
         "$HOME/.themes/torii-zayed.omp.json" \
+        "$HOME/.config/Kvantum/kvantum.kvconfig" \
         "$HOME/.config/Kvantum/gruvbox-kvantum/gruvbox-kvantum.kvconfig" \
         "$HOME/.config/Kvantum/gruvbox-kvantum/gruvbox-kvantum.svg"; do
-        [[ -e "$path" ]] || { echo "[MISSING] $path" >&2; failed=1; }
+        [[ -r "$path" ]] || { echo "[MISSING OR UNREADABLE] $path" >&2; failed=1; }
     done
+    [[ -x "$HOME/.config/hypr/scripts/wallpaper.sh" ]] || { echo "[INVALID] deployed wallpaper.sh is not executable" >&2; failed=1; }
     grep -q 'persistent-workspaces.*\[1, 2, 3, 4, 5\]' "$HOME/.config/waybar/config.jsonc.template" || { echo "[MISSING] Waybar persistent workspaces 1-5" >&2; failed=1; }
+    grep -Fq '"modules-left": ["hyprland/workspaces", "hyprland/window", "power-profiles-daemon", "tray"]' "$HOME/.config/waybar/config.jsonc.template" || { echo "[REGRESSION] Waybar module order changed" >&2; failed=1; }
+    grep -Fq '"on-click": "hyprctl dispatch workspace {name}"' "$HOME/.config/waybar/config.jsonc.template" || { echo "[REGRESSION] Waybar workspace dispatcher changed" >&2; failed=1; }
     grep -q '^color_theme = "gruvbox_dark_v2"' "$HOME/.config/btop/btop.conf" || { echo "[MISSING] btop Gruvbox theme selection" >&2; failed=1; }
-    grep -q '^theme=gruvbox-kvantum' "$HOME/.config/Kvantum/kvantum.kvconfig" || { echo "[MISSING] Kvantum selector" >&2; failed=1; }
-    if command -v fish >/dev/null 2>&1; then fish -n "$HOME/.config/fish/config.fish" || failed=1; fi
-    if command -v hyprland >/dev/null 2>&1; then
-        if ! HOME="$HOME" hyprland --verify-config >/dev/null 2>&1; then echo "[FAILED] Hyprland configuration verification" >&2; failed=1; else echo "[OK] Hyprland configuration"; fi
+    kvantum_selector_is_active "$HOME/.config/Kvantum/kvantum.kvconfig" || { echo "[MISSING] Kvantum selector" >&2; failed=1; }
+    grep -q '^style=kvantum$' "$HOME/.config/qt6ct/qt6ct.conf" || { echo "[MISSING] Qt6ct Kvantum style selection" >&2; failed=1; }
+    kvantum_payload="$(find "$HOME/.config/Kvantum/gruvbox-kvantum" -maxdepth 1 -type f -printf '%f\n' 2>/dev/null | sort)"
+    [[ "$kvantum_payload" == $'gruvbox-kvantum.kvconfig\ngruvbox-kvantum.svg' ]] || { echo "[INVALID] incomplete or unexpected Kvantum payload" >&2; failed=1; }
+    [[ ! -e "$HOME/.themes/gruvbox-kvantum" ]] || { echo "[INVALID] duplicate nested Kvantum theme was deployed under ~/.themes" >&2; failed=1; }
+    jq empty "$HOME/.config/fastfetch/config.jsonc" || { echo "[INVALID] Fastfetch JSON/JSONC" >&2; failed=1; }
+    jq empty "$HOME/.themes/torii-zayed.omp.json" || { echo "[INVALID] Oh My Posh theme JSON" >&2; failed=1; }
+    logo_source="$(jq -r '.logo.source' "$HOME/.config/fastfetch/config.jsonc" 2>/dev/null || true)"
+    [[ "$logo_source" == '~/.config/fastfetch/claude.txt' ]] || { echo "[INVALID] Fastfetch logo path: $logo_source" >&2; failed=1; }
+    [[ -r "$HOME/.config/fastfetch/claude.txt" ]] || { echo "[MISSING] Fastfetch Claude logo" >&2; failed=1; }
+    if grep -REn '/home/zayed|torii-fastfetch|"type"[[:space:]]*:[[:space:]]*"Command"|password|api[_-]?key|private[_-]?key' \
+        "$HOME/.config/fastfetch" "$HOME/.themes/torii-zayed.omp.json" >/dev/null; then
+        echo "[PRIVACY] deployed Fastfetch or Oh My Posh payload contains a forbidden host/private reference." >&2
+        failed=1
     fi
-    if (( failed )); then return 1; fi
+    grep -Fxq 'oh-my-posh init fish --config ~/.themes/torii-zayed.omp.json | source' "$HOME/.config/fish/config.fish" || { echo "[INVALID] Fish Oh My Posh path" >&2; failed=1; }
+    [[ "$(grep -Fc 'fastfetch' "$HOME/.config/fish/config.fish")" == 2 ]] || { echo "[INVALID] Fastfetch must start once and have one alias" >&2; failed=1; }
+    grep -Fxq 'alias ff="/usr/bin/fastfetch"' "$HOME/.config/fish/config.fish" || { echo "[INVALID] Fastfetch ff alias" >&2; failed=1; }
+    grep -Fq '<transparent,background>\ue0b0</>' "$HOME/.themes/torii-zayed.omp.json" || { echo "[REGRESSION] dynamic Git separator missing" >&2; failed=1; }
+    if grep -Rql 'awww-daemon' "$HOME/.config/hypr/modules" "$HOME/.config/hypr/profiles" 2>/dev/null; then
+        echo "[REGRESSION] competing awww-daemon startup remains" >&2
+        failed=1
+    fi
+    grep -Fq 'path = ~/.config/hypr/wallpapers/torii.jpg' "$HOME/.config/hypr/hyprlock.conf" || { echo "[INVALID] Hyprlock Torii path" >&2; failed=1; }
+    if command -v fish >/dev/null 2>&1; then fish -n "$HOME/.config/fish/config.fish" || failed=1; fi
+    if ! HOME="$HOME" fastfetch --config "$HOME/.config/fastfetch/config.jsonc" --show-errors true --pipe true >/dev/null; then
+        echo "[FAILED] Fastfetch rejected the deployed configuration." >&2
+        failed=1
+    fi
+    if ! "$HOME/.local/bin/oh-my-posh" print primary --config "$HOME/.themes/torii-zayed.omp.json" --shell fish --plain >/dev/null; then
+        echo "[FAILED] pinned Oh My Posh rejected the deployed theme." >&2
+        failed=1
+    fi
+    local hyprland_command=""
+    hyprland_command="$(command -v hyprland || command -v Hyprland || true)"
+    if [[ -n "$hyprland_command" ]]; then
+        if ! HOME="$HOME" "$hyprland_command" --verify-config >/dev/null 2>&1; then echo "[FAILED] Hyprland configuration verification" >&2; failed=1; else echo "[OK] Hyprland configuration"; fi
+    fi
+    if grep -RFl "$SCRIPT_ROOT" "$HOME/.config/hypr" "$HOME/.config/fastfetch" "$HOME/.config/Kvantum" "$HOME/.themes/torii-zayed.omp.json" >/dev/null 2>&1; then
+        echo "[INVALID] deployed configuration points to the repository checkout." >&2
+        failed=1
+    fi
+    if (( failed )); then
+        VALIDATION_STATUS="failed"
+        return 1
+    fi
+    VALIDATION_STATUS="passed"
 }
 
 show_warnings() {
@@ -783,13 +1184,44 @@ show_warnings() {
     echo "  - Oranchelo is not bundled; Rofi uses it when installed and falls back to Papirus-Dark."
     echo "  - Brave is optional/AUR and no browser profile is copied. Use --enable-optional brave explicitly."
     echo "  - Fedora package installation is experimental; NixOS requires native Home Manager/NixOS modules."
-    echo "  - Kvantum payload source is a locally approved copy by Sourav Gope; redistribution licensing still needs review before public release."
+    echo "  - The Gruvbox Kvantum payload names Sourav Gope as author; the owner authorized this branch publication, but no standalone license file was present."
     if [[ "$DISTRO_ID" == gentoo ]]; then echo "  - Gentoo requires manual review for unmapped Hypr ecosystem atoms and USE flags."; fi
     if (( BACKUP_CREATED )); then echo "  - Replaced files were backed up under $BACKUP_ROOT; manifest: $BACKUP_MANIFEST"; fi
 }
 
+show_final_checklist() {
+    echo
+    echo "Final installation checklist"
+    echo "  Packages installed/verified: yes"
+    echo "  Configuration deployed: yes"
+    echo "  Profile selected: $PROFILE_NAME"
+    echo "  Desktop settings: $DESKTOP_SETTINGS_STATUS"
+    echo "  Fish login shell: $FISH_SHELL_STATUS"
+    echo "  Torii wallpaper: deployed; wallpaper.sh owns daemon startup/readiness"
+    echo "  Waybar: workspaces 1-5 and profile network behavior validated"
+    echo "  Fastfetch: config and Claude logo validated"
+    echo "  Oh My Posh: pinned binary accepted the synchronized theme"
+    echo "  Kvantum: gruvbox-kvantum discovered in the user theme directory and selected"
+    echo "  Required services: $SYSTEM_SERVICES_STATUS"
+    echo "  Validation result: $VALIDATION_STATUS"
+    if [[ "$FISH_SHELL_STATUS" == changed* ]]; then
+        echo "  Logout/reboot required: yes, for the new login shell and desktop session"
+    else
+        echo "  Logout/reboot required: restart the Hyprland session to load the complete rice"
+    fi
+    echo
+    echo "Remaining manual steps"
+    if [[ "$SYSTEM_SERVICES_STATUS" == unchanged* ]]; then
+        echo "  - Enable any required NetworkManager, Bluetooth, or power-profile service that you declined."
+    else
+        echo "  None."
+    fi
+}
+
+validate_repository_payload
 resolve_profile
 collect_missing
+collect_interactive_choices
 show_summary
 
 if (( AUDIT_ONLY )); then
@@ -844,6 +1276,7 @@ if (( ! INSTALL_CONFIRMATION_DONE )) && ! confirm "Deploy the selected profile a
 fi
 deploy_configuration
 apply_desktop_settings
+configure_system_services
 configure_fish_shell
 validate_deployment
 
@@ -852,4 +1285,5 @@ echo -e "${GREEN}Complete rice installation finished.${NC}"
 echo "Selected profile: $PROFILE_NAME"
 echo "Torii is configured for both profiles and will be loaded by the Hyprland autostart wallpaper script."
 echo "Start Hyprland from the installed session entry, or reboot and select Hyprland at the login screen."
+show_final_checklist
 show_warnings

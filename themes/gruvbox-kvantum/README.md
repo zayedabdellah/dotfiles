@@ -1,10 +1,8 @@
 # Gruvbox Kvantum theme
 
-The active configuration selects `gruvbox-kvantum`. The exact active local
-payload is present under `themes/kvantum/gruvbox-kvantum/` for the approved
-local installer and VM tests. The payload identifies Sourav Gope but contains
-no redistribution license or notice, so public redistribution is still a
-review decision. Do not substitute `kvantum-dark` silently.
-
-Before a public commit or release, confirm permission or obtain a compatible
-upstream license and record it in `docs/asset-provenance.md`.
+The active configuration selects `gruvbox-kvantum`. The canonical payload is
+the approved `.kvconfig` and `.svg` pair under
+`themes/kvantum/gruvbox-kvantum/`. Its metadata names Sourav Gope. The owner
+authorized publishing those exact files on the testing branch, but the local
+payload contains no standalone license notice, so downstream redistribution
+rights still require review. Do not substitute `kvantum-dark` silently.

@@ -27,6 +27,9 @@ gui-wm/hyprland
 gui-apps/waybar
 app-emulation/kitty
 app-shells/fish
+app-misc/fastfetch
+sys-apps/util-linux
+app-misc/jq
 xfce-base/thunar
 gui-apps/grim
 gui-apps/slurp
@@ -54,19 +57,27 @@ this shell installer does not replace declarative system configuration.
 
 ## Kvantum local dependency
 
-The active selector remains `gruvbox-kvantum`. The exact local test payload is
-kept under `themes/kvantum/gruvbox-kvantum/` because the owner authorized this
-repository test. Its source metadata names Sourav Gope, but a redistribution
-license is still unverified; review before publishing. Deployment copies
-`gruvbox-kvantum.kvconfig` and `gruvbox-kvantum.svg` into both:
+The active selector remains `gruvbox-kvantum`. The exact local payload is kept
+under `themes/kvantum/gruvbox-kvantum/`; its source metadata names Sourav Gope
+and the owner explicitly authorized publication on this testing branch. No
+standalone redistribution license accompanied the local files, so downstream
+reuse still requires review. Deployment copies `gruvbox-kvantum.kvconfig` and
+`gruvbox-kvantum.svg` into:
 
 ```text
 ~/.config/Kvantum/gruvbox-kvantum/
-~/.themes/gruvbox-kvantum/
 ```
 
-Without those files, exact fresh-install Kvantum visual parity is unavailable;
-the installer warns and continues without substituting another theme.
+That directory and matching base filenames are Kvantum's user-theme discovery
+layout. The installer preserves unrelated entries in
+`~/.config/Kvantum/kvantum.kvconfig`, sets `theme=gruvbox-kvantum`, and sets
+Qt6ct `style=kvantum`. An incomplete payload is a fatal validation error; no
+fallback theme is silently substituted.
+
+Fastfetch maps to `app-misc/fastfetch` on Gentoo. The installer continues to
+stop before deployment when any other required command lacks a verified
+Gentoo atom; it never passes executable names to `emerge` or edits Portage
+configuration.
 
 Optional emulator, overlay, streaming, and MIME modules are disabled by
 default. Arch official packages are installed only when explicitly enabled;

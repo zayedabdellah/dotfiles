@@ -57,7 +57,7 @@
             "{{ if gt .Behind 0 }}#FF6A00{{ end }}"
           ],
           "foreground": "#1F2022",
-          "leading_diamond": "<transparent,#7A828A>\ue0b0</>",
+          "leading_diamond": "<transparent,background>\ue0b0</>",
           "trailing_diamond": "\ue0b0",
           "options": {
             "fetch_status": true

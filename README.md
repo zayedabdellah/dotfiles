@@ -56,6 +56,11 @@ To set up these dotfiles, follow these steps:
         hidden files.
     *   Copy the approved configuration, theme, cursor, font, wallpaper, and
         script assets to their corresponding XDG locations.
+    *   Install Fastfetch and its approved Claude logo, then start it once per
+        interactive Fish session (`ff` is an alias for `/usr/bin/fastfetch`).
+    *   Apply the GTK, icon, cursor, font, Qt6ct, and Kvantum user settings.
+    *   Ask once near the beginning about the Fish login shell and required
+        NetworkManager, Bluetooth, and power-profile services.
 
     ```bash
     chmod +x install.sh
@@ -63,8 +68,10 @@ To set up these dotfiles, follow these steps:
     ```
 
 With no arguments the installer presents the profile menu, prints the complete
-plan, asks for confirmation, installs packages, deploys files, validates the
-result, and prints the next Hyprland/reboot step. The menu is:
+plan, asks for confirmation, installs packages, deploys files, applies desktop
+settings, validates the result, and prints a detailed final checklist. No
+additional `--apply-desktop-settings` or `--set-default-shell` invocation is
+required. The menu is:
 
 ```text
 1) Generic
@@ -77,15 +84,25 @@ If the non-private display/GPU check is exact, option 2 is recommended but
 never selected silently. Non-interactive operation safely selects `generic`
 unless `--profile` is supplied.
 
-Optional modules are disabled unless explicitly requested with
-`--enable-optional MODULE`. `--packages-only`, `--config-only`, and
-`--skip-packages` separate package and configuration operations. Use `--audit`
+The normal no-argument flow offers official and AUR optional modules in one
+early selection prompt; Enter selects none. `--enable-optional MODULE` remains
+available for advanced or targeted runs. `--packages-only`, `--config-only`,
+and `--skip-packages` separate package and configuration operations. Use `--audit`
 or `--dry-run` to inspect planned actions without downloads, package changes,
 shell changes, desktop settings, or configuration deployment. On a normal
 interactive full install, Fish is offered as the default shell with Yes as the
-default; declining leaves the login shell unchanged. `--set-default-shell`
-requests the same opt-in operation explicitly.
-GTK desktop settings are applied only with `--apply-desktop-settings`.
+default. The installer resolves the target with `id`, verifies Fish and
+`/etc/shells`, runs `chsh` for that account, checks the resulting `getent`
+record, and explains that logout/login or reboot is required. Declining leaves
+the login shell unchanged. `--set-default-shell` remains available for
+explicit targeted runs. Normal no-argument installation automatically applies
+the approved desktop settings; `--apply-desktop-settings` remains available
+for targeted reruns.
+
+The initial flow also asks whether required system services should be enabled
+when needed. It never enables a display manager or unrelated system service.
+Optional official and AUR components remain clearly separated. AUR components
+require an existing helper and explicit approval; no helper is installed.
 
 Before replacing a different existing file, the installer creates a
 timestamped backup under `~/.local/state/dotfiles/backups/` and records each
@@ -120,24 +137,24 @@ GTK, Qt/Kvantum, cursor, browser-interface theme, font, and wallpaper assets
 are included under `themes/`, `icons/`, `config/brave/`, `fonts/`, and
 `config/hypr/`. The confirmed Torii image is included at
 `config/hypr/wallpapers/torii.jpg`; the Hyprlock wrapper still uses a
-screenshot fallback when the image is unavailable.
+screenshot fallback only when the image is absent. Hyprland autostart invokes
+`wallpaper.sh` for both profiles. That script is the sole owner of starting
+`awww-daemon`, waits up to ten seconds for cold-start readiness, and reports a
+real failure if the daemon or `awww img` fails.
+
+Fastfetch is deployed to `~/.config/fastfetch/config.jsonc` with its approved
+logo at `~/.config/fastfetch/claude.txt`. Its private-use icons require the
+bundled JetBrains Mono Nerd Font payload. Oh My Posh uses only
+`~/.themes/torii-zayed.omp.json`; no nested duplicate theme is deployed.
 
 #### Theme Setup Instructions
 
-To ensure your apps pick up the themes correctly:
-1.  **GTK Apps:** The script attempts to set the theme automatically. You can verify this by opening `nwg-look`.
-2.  **Qt Apps:** 
-    *   Open **Kvantum Manager**.
-    *   Go to **Change/Delete Theme**.
-    *   Select **gruvbox-kvantum** from the list and click **Use this theme**.
-        The exact local payload is deployed for the approved test, but its
-        public redistribution license still requires review.
-    *   Open **qt6ct** (or `qt5ct` if using Qt5) and ensure the **Style** is set to **kvantum**.
-
-The installer copies the exact approved local payload into both
-`~/.config/Kvantum/gruvbox-kvantum/` and `~/.themes/gruvbox-kvantum/`, and
-keeps `theme=gruvbox-kvantum` selected. Review `docs/asset-provenance.md`
-before any public commit or redistribution.
+The installer selects the GTK, Papirus-Dark icon, Bibata cursor, and Nerd Font
+settings automatically. For Qt, it deploys the complete approved payload only
+to `~/.config/Kvantum/gruvbox-kvantum/`, preserves unrelated selector entries,
+sets `theme=gruvbox-kvantum`, and configures Qt6ct with `style=kvantum`.
+Kvantum Manager consequently lists **gruvbox-kvantum** under its user themes;
+no manual theme selection is required.
 
 ## Dependencies
 
@@ -164,6 +181,8 @@ The following applications are used in these configurations:
 *   **Kvantum**: A SVG-based theme engine for Qt.
 *   **qt6ct**: Qt6 Configuration Tool.
 *   **fish**: A smart and user-friendly command line shell.
+*   **Fastfetch**: Interactive system information using the approved Claude logo.
+*   **util-linux / chsh**: Safe login-shell selection and verification support.
 *   **Papirus-Dark**: Required icon theme for GTK, Qt, xsettingsd, and Rofi fallback.
 
 Rofi preserves Oranchelo as the preferred icon theme without bundling it. The
@@ -189,6 +208,23 @@ The unsafe `xhost +SI:localuser:root` command is not part of the default
 autostart. Only if a specific legacy X11 application requires root access,
 apply that command manually for the duration of that session and remove the
 access afterward. It is not installed or automated by this repository.
+
+## Fresh Arch VM test
+
+Run these commands as the normal VM user:
+
+```bash
+sudo pacman -S --needed git
+git clone --branch sync-host-2026 --single-branch https://github.com/zayedabdellah/dotfiles.git
+cd dotfiles
+git --no-pager log -1 --oneline
+./install.sh
+```
+
+Choose `1) Generic`. Do not run the installer as root. After a successful run,
+log out and back in or reboot. Real package and graphical-session integration
+must be confirmed in the VM; the repository test suite uses mocked package,
+account, service, and desktop-setting commands with temporary homes.
 
 ## Contributing
 

@@ -60,7 +60,6 @@ return {
         waybar_top_config = home .. "/.config/waybar/config-top.jsonc",
         media_daemon = home .. "/.config/waybar/scripts/media-daemon.sh",
         pipewire_launcher = "if command -v gentoo-pipewire-launcher >/dev/null 2>&1; then gentoo-pipewire-launcher; elif command -v systemctl >/dev/null 2>&1; then systemctl --user start pipewire pipewire-pulse wireplumber; fi",
-        wallpaper_daemon = "awww-daemon",
         wallpaper = home .. "/.config/hypr/scripts/wallpaper.sh",
         bluetooth_applet = "blueman-applet",
         tailscale_systray = "tailscale systray",
