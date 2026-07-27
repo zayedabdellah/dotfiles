@@ -156,6 +156,16 @@ sets `theme=gruvbox-kvantum`, and configures Qt6ct with `style=kvantum`.
 Kvantum Manager consequently lists **gruvbox-kvantum** under its user themes;
 no manual theme selection is required.
 
+The cursor payload is installed as
+`~/.local/share/icons/Bibata-Modern-Amber/`. The installer also owns the single
+XDG user default at `~/.local/share/icons/default/index.theme`, which inherits
+`Bibata-Modern-Amber`. It does not create a duplicate `~/.icons/default`.
+Hyprland exports `XCURSOR_THEME`, `HYPRCURSOR_THEME`, both size variables at
+`24`, and an `XCURSOR_PATH` containing the user icon directory so native
+Wayland, Qt, GTK, and XWayland clients resolve the same payload. GTK 3/4,
+xsettingsd, and gsettings use the same name and size. A logout/login or reboot
+is required for an existing session to inherit these environment changes.
+
 ## Dependencies
 
 The following applications are used in these configurations:

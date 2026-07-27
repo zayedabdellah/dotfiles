@@ -20,6 +20,7 @@ hl.env("DOTFILES_MACHINE_PROFILE", machine.name)
 -- See https://wiki.hypr.land/Configuring/Advanced-and-Cool/Environment-variables/
 set_env("XCURSOR_THEME")
 set_env("XCURSOR_SIZE")
+set_env("XCURSOR_PATH")
 set_env("HYPRCURSOR_THEME")
 set_env("HYPRCURSOR_SIZE")
 

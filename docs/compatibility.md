@@ -84,3 +84,14 @@ default. Arch official packages are installed only when explicitly enabled;
 AUR modules require an existing helper and a separate confirmation. Their
 hardware-specific choices must still be reviewed manually before enabling
 them.
+
+## Cursor resolution
+
+Both profiles deploy `Bibata-Modern-Amber` under
+`~/.local/share/icons/` and export an `XCURSOR_PATH` containing that directory
+before the Hyprland session starts. This is required because Xcursor/XWayland
+clients may otherwise search only legacy or system icon roots and fall back to
+the generic `default` theme. The sole managed default index is
+`~/.local/share/icons/default/index.theme`; it inherits
+`Bibata-Modern-Amber`. The installer intentionally does not create a second
+`~/.icons/default` copy.

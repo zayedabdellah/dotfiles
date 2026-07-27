@@ -57,6 +57,11 @@ EOF
     cat > "$bin/gsettings" <<'EOF'
 #!/bin/sh
 printf '%s\n' "gsettings $*" >> "$DOTFILES_TEST_LOG"
+if [ "$1" = get ] && [ "$3" = cursor-theme ]; then
+    printf "%s\n" "'Bibata-Modern-Amber'"
+elif [ "$1" = get ] && [ "$3" = cursor-size ]; then
+    printf '%s\n' 24
+fi
 exit 0
 EOF
     cat > "$bin/xdg-user-dirs-update" <<'EOF'
@@ -184,6 +189,17 @@ grep -q 'util-linux' "$TEST_ROOT/commands.log"
 [[ -f "$full_home/.config/hypr/wallpapers/torii.jpg" ]]
 [[ -f "$full_home/.config/fastfetch/config.jsonc" ]]
 [[ -f "$full_home/.config/fastfetch/claude.txt" ]]
+[[ -f "$full_home/.local/share/icons/Bibata-Modern-Amber/index.theme" ]]
+[[ -f "$full_home/.local/share/icons/Bibata-Modern-Amber/cursors/left_ptr" ]]
+[[ -f "$full_home/.local/share/icons/Bibata-Modern-Amber/hyprcursors/left_ptr.hlc" ]]
+[[ -f "$full_home/.local/share/icons/Bibata-Modern-Amber/manifest.hl" ]]
+grep -Fxq 'Inherits=Bibata-Modern-Amber' "$full_home/.local/share/icons/default/index.theme"
+grep -Fxq 'gtk-cursor-theme-name=Bibata-Modern-Amber' "$full_home/.config/gtk-3.0/settings.ini"
+grep -Fxq 'gtk-cursor-theme-size=24' "$full_home/.config/gtk-3.0/settings.ini"
+grep -Fxq 'gtk-cursor-theme-name=Bibata-Modern-Amber' "$full_home/.config/gtk-4.0/settings.ini"
+grep -Fxq 'gtk-cursor-theme-size=24' "$full_home/.config/gtk-4.0/settings.ini"
+grep -Fxq 'Gtk/CursorThemeName "Bibata-Modern-Amber"' "$full_home/.config/xsettingsd/xsettingsd.conf"
+grep -Fxq 'Gtk/CursorThemeSize 24' "$full_home/.config/xsettingsd/xsettingsd.conf"
 [[ -f "$full_home/.config/Kvantum/gruvbox-kvantum/gruvbox-kvantum.svg" ]]
 [[ -f "$full_home/.config/btop/themes/gruvbox_dark_v2.theme" ]]
 [[ -f "$full_home/.themes/torii-zayed.omp.json" ]]
@@ -223,6 +239,8 @@ if command -v script >/dev/null 2>&1; then
     grep -q 'Remaining manual steps' <<<"$noarg_output"
     grep -q '  None.' <<<"$noarg_output"
     grep -q 'gsettings set org.gnome.desktop.interface gtk-theme gruvbox-dark-gtk' "$TEST_ROOT/commands.log"
+    grep -q 'gsettings set org.gnome.desktop.interface cursor-theme Bibata-Modern-Amber' "$TEST_ROOT/commands.log"
+    grep -q 'gsettings set org.gnome.desktop.interface cursor-size 24' "$TEST_ROOT/commands.log"
     grep -q 'xdg-user-dirs-update' "$TEST_ROOT/commands.log"
     grep -q 'systemctl enable --now NetworkManager.service' "$TEST_ROOT/commands.log"
     grep -q "chsh -s $noarg_bin/fish $(id -un)" "$TEST_ROOT/commands.log"
@@ -379,6 +397,17 @@ grep -q 'output = "eDP-1"' "$zayed_home/.config/hypr/profiles/zayed-laptop.lua"
 grep -q 'mode = "2560x1600@165"' "$zayed_home/.config/hypr/profiles/zayed-laptop.lua"
 grep -q 'scale = 2' "$zayed_home/.config/hypr/profiles/zayed-laptop.lua"
 ! grep -q 'zayed-laptop' "$ROOT/config/hypr/scripts/hyprlock.sh" || true
+for cursor_profile in generic zayed-laptop; do
+    cursor_profile_file="$zayed_home/.config/hypr/profiles/$cursor_profile.lua"
+    grep -Fq 'XCURSOR_THEME = "Bibata-Modern-Amber"' "$cursor_profile_file"
+    grep -Fq 'XCURSOR_SIZE = "24"' "$cursor_profile_file"
+    grep -Fq 'HYPRCURSOR_THEME = "Bibata-Modern-Amber"' "$cursor_profile_file"
+    grep -Fq 'HYPRCURSOR_SIZE = "24"' "$cursor_profile_file"
+    grep -Fq 'home .. "/.local/share/icons:/usr/share/icons:/usr/share/pixmaps"' "$cursor_profile_file"
+done
+grep -Fq 'set_env("XCURSOR_PATH")' "$zayed_home/.config/hypr/modules/env.lua"
+grep -Fxq 'Inherits=Bibata-Modern-Amber' "$zayed_home/.local/share/icons/default/index.theme"
+! rg -ni 'cursor[^=]*=[[:space:]]*(Adwaita|default)' "$zayed_home/.config/qt6ct" "$zayed_home/.config/Kvantum"
 
 failure_home="$TEST_ROOT/failure-home"
 failure_bin="$TEST_ROOT/failure-bin"
@@ -529,6 +558,37 @@ grep -Fq '[fastfetch]=app-misc/fastfetch' "$ROOT/install.sh"
 grep -Fq '[fastfetch]=fastfetch' "$ROOT/install.sh"
 grep -Fq '[chsh]=util-linux' "$ROOT/install.sh"
 
+cursor_home="$TEST_ROOT/cursor-home"
+mkdir -p "$cursor_home/.config/gtk-3.0" "$cursor_home/.config/gtk-4.0" \
+    "$cursor_home/.config/xsettingsd" "$cursor_home/.local/share/icons/default"
+cat > "$cursor_home/.config/gtk-3.0/settings.ini" <<'EOF'
+[Settings]
+gtk-cursor-theme-name=Adwaita
+gtk-cursor-theme-size=32
+EOF
+cp "$cursor_home/.config/gtk-3.0/settings.ini" "$cursor_home/.config/gtk-4.0/settings.ini"
+cat > "$cursor_home/.config/xsettingsd/xsettingsd.conf" <<'EOF'
+Gtk/CursorThemeName "Adwaita"
+Gtk/CursorThemeSize 32
+EOF
+cat > "$cursor_home/.local/share/icons/default/index.theme" <<'EOF'
+[Icon Theme]
+Inherits=Adwaita
+EOF
+run_installer "$cursor_home" "$full_bin" --non-interactive --profile generic --config-only >/dev/null
+grep -Fxq 'gtk-cursor-theme-name=Bibata-Modern-Amber' "$cursor_home/.config/gtk-3.0/settings.ini"
+grep -Fxq 'gtk-cursor-theme-name=Bibata-Modern-Amber' "$cursor_home/.config/gtk-4.0/settings.ini"
+grep -Fxq 'Gtk/CursorThemeName "Bibata-Modern-Amber"' "$cursor_home/.config/xsettingsd/xsettingsd.conf"
+grep -Fxq 'Inherits=Bibata-Modern-Amber' "$cursor_home/.local/share/icons/default/index.theme"
+cursor_manifest="$(find "$cursor_home/.local/state/dotfiles/backups" -name manifest.tsv -type f | sort | tail -1)"
+grep -q '/.config/gtk-3.0/settings.ini' "$cursor_manifest"
+grep -q '/.config/gtk-4.0/settings.ini' "$cursor_manifest"
+grep -q '/.config/xsettingsd/xsettingsd.conf' "$cursor_manifest"
+grep -q '/.local/share/icons/default/index.theme' "$cursor_manifest"
+cursor_backup_count="$(find "$cursor_home/.local/state/dotfiles/backups" -name manifest.tsv -type f | wc -l)"
+run_installer "$cursor_home" "$full_bin" --non-interactive --profile generic --config-only >/dev/null
+[[ "$(find "$cursor_home/.local/state/dotfiles/backups" -name manifest.tsv -type f | wc -l)" == "$cursor_backup_count" ]]
+
 cmp "$full_home/.config/fastfetch/config.jsonc" "$zayed_home/.config/fastfetch/config.jsonc"
 cmp "$full_home/.config/fastfetch/claude.txt" "$zayed_home/.config/fastfetch/claude.txt"
 cmp "$full_home/.config/Kvantum/gruvbox-kvantum/gruvbox-kvantum.kvconfig" \
@@ -559,6 +619,36 @@ if [[ -r "$full_home/${logo_source#\~/}" ]]; then
     exit 1
 fi
 mv "$resolved_logo.missing" "$resolved_logo"
+
+incomplete_root="$TEST_ROOT/incomplete-cursor-repo"
+required_fixture_files=(
+    install.sh
+    config/fastfetch/config.jsonc
+    config/fastfetch/claude.txt
+    config/hypr/wallpapers/torii.jpg
+    config/hypr/scripts/wallpaper.sh
+    config/hypr/scripts/hyprlock.sh
+    config/Kvantum/kvantum.kvconfig
+    config/qt6ct/qt6ct.conf
+    icons/Bibata-Modern-Amber/index.theme
+    icons/Bibata-Modern-Amber/manifest.hl
+    icons/default/index.theme
+    themes/oh-my-posh/torii-zayed.omp.json
+    themes/kvantum/gruvbox-kvantum/gruvbox-kvantum.kvconfig
+    themes/kvantum/gruvbox-kvantum/gruvbox-kvantum.svg
+)
+for fixture_file in "${required_fixture_files[@]}"; do
+    mkdir -p "$incomplete_root/$(dirname "$fixture_file")"
+    cp "$ROOT/$fixture_file" "$incomplete_root/$fixture_file"
+done
+if HOME="$TEST_ROOT/incomplete-cursor-home" DOTFILES_DISTRO_ID=arch \
+    bash "$incomplete_root/install.sh" --dry-run --profile generic \
+    >"$TEST_ROOT/incomplete-cursor.out" 2>&1; then
+    echo "missing cursor payload unexpectedly passed repository validation" >&2
+    exit 1
+fi
+grep -q 'icons/Bibata-Modern-Amber/cursors/left_ptr' "$TEST_ROOT/incomplete-cursor.out"
+
 ! rg -n '/home/zayed|torii-fastfetch|password|token|api[_-]?key|private[_-]?key|"type"[[:space:]]*:[[:space:]]*"Command"' \
     "$ROOT/config/fastfetch" "$ROOT/themes/oh-my-posh/torii-zayed.omp.json"
 grep -Fq '<transparent,background>\ue0b0</>' "$ROOT/themes/oh-my-posh/torii-zayed.omp.json"

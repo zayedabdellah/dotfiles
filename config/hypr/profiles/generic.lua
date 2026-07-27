@@ -23,6 +23,7 @@ return {
     env = {
         XCURSOR_THEME = "Bibata-Modern-Amber",
         XCURSOR_SIZE = "24",
+        XCURSOR_PATH = home .. "/.local/share/icons:/usr/share/icons:/usr/share/pixmaps",
         HYPRCURSOR_THEME = "Bibata-Modern-Amber",
         HYPRCURSOR_SIZE = "24",
         GDK_BACKEND = "wayland,x11,*",

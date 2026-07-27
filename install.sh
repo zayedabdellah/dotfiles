@@ -867,6 +867,11 @@ validate_repository_payload() {
         "$CONFIG_DIR/hypr/wallpapers/torii.jpg" \
         "$CONFIG_DIR/hypr/scripts/wallpaper.sh" \
         "$CONFIG_DIR/hypr/scripts/hyprlock.sh" \
+        "$SCRIPT_ROOT/icons/Bibata-Modern-Amber/index.theme" \
+        "$SCRIPT_ROOT/icons/Bibata-Modern-Amber/cursors/left_ptr" \
+        "$SCRIPT_ROOT/icons/Bibata-Modern-Amber/hyprcursors/left_ptr.hlc" \
+        "$SCRIPT_ROOT/icons/Bibata-Modern-Amber/manifest.hl" \
+        "$SCRIPT_ROOT/icons/default/index.theme" \
         "$SCRIPT_ROOT/themes/oh-my-posh/torii-zayed.omp.json" \
         "$SCRIPT_ROOT/themes/kvantum/gruvbox-kvantum/gruvbox-kvantum.kvconfig" \
         "$SCRIPT_ROOT/themes/kvantum/gruvbox-kvantum/gruvbox-kvantum.svg"; do
@@ -891,6 +896,10 @@ validate_repository_payload() {
     }
     grep -Fq '"source": "~/.config/fastfetch/claude.txt"' "$CONFIG_DIR/fastfetch/config.jsonc" || {
         echo "[INVALID] Fastfetch logo source is not the final installed path." >&2
+        failed=1
+    }
+    grep -Fxq 'Inherits=Bibata-Modern-Amber' "$SCRIPT_ROOT/icons/default/index.theme" || {
+        echo "[INVALID] default cursor theme does not inherit Bibata-Modern-Amber." >&2
         failed=1
     }
     if grep -REn '/home/zayed|torii-fastfetch|"type"[[:space:]]*:[[:space:]]*"Command"' \
@@ -1118,6 +1127,11 @@ validate_deployment() {
         "$HOME/.config/btop/themes/gruvbox_dark_v2.theme" \
         "$HOME/.config/fastfetch/config.jsonc" \
         "$HOME/.config/fastfetch/claude.txt" \
+        "$HOME/.local/share/icons/Bibata-Modern-Amber/index.theme" \
+        "$HOME/.local/share/icons/Bibata-Modern-Amber/cursors/left_ptr" \
+        "$HOME/.local/share/icons/Bibata-Modern-Amber/hyprcursors/left_ptr.hlc" \
+        "$HOME/.local/share/icons/Bibata-Modern-Amber/manifest.hl" \
+        "$HOME/.local/share/icons/default/index.theme" \
         "$HOME/.themes/torii-zayed.omp.json" \
         "$HOME/.config/Kvantum/kvantum.kvconfig" \
         "$HOME/.config/Kvantum/gruvbox-kvantum/gruvbox-kvantum.kvconfig" \
@@ -1131,6 +1145,29 @@ validate_deployment() {
     grep -q '^color_theme = "gruvbox_dark_v2"' "$HOME/.config/btop/btop.conf" || { echo "[MISSING] btop Gruvbox theme selection" >&2; failed=1; }
     kvantum_selector_is_active "$HOME/.config/Kvantum/kvantum.kvconfig" || { echo "[MISSING] Kvantum selector" >&2; failed=1; }
     grep -q '^style=kvantum$' "$HOME/.config/qt6ct/qt6ct.conf" || { echo "[MISSING] Qt6ct Kvantum style selection" >&2; failed=1; }
+    grep -Fxq 'Inherits=Bibata-Modern-Amber' "$HOME/.local/share/icons/default/index.theme" || { echo "[MISSING] default Bibata cursor inheritance" >&2; failed=1; }
+    for path in "$HOME/.config/gtk-3.0/settings.ini" "$HOME/.config/gtk-4.0/settings.ini"; do
+        grep -Fxq 'gtk-cursor-theme-name=Bibata-Modern-Amber' "$path" || { echo "[INVALID] GTK cursor theme in $path" >&2; failed=1; }
+        grep -Fxq 'gtk-cursor-theme-size=24' "$path" || { echo "[INVALID] GTK cursor size in $path" >&2; failed=1; }
+    done
+    grep -Fxq 'Gtk/CursorThemeName "Bibata-Modern-Amber"' "$HOME/.config/xsettingsd/xsettingsd.conf" || { echo "[INVALID] xsettingsd cursor theme" >&2; failed=1; }
+    grep -Fxq 'Gtk/CursorThemeSize 24' "$HOME/.config/xsettingsd/xsettingsd.conf" || { echo "[INVALID] xsettingsd cursor size" >&2; failed=1; }
+    for path in "$HOME/.config/hypr/profiles/generic.lua" "$HOME/.config/hypr/profiles/zayed-laptop.lua"; do
+        grep -Fq 'XCURSOR_THEME = "Bibata-Modern-Amber"' "$path" || { echo "[INVALID] XCURSOR_THEME in $path" >&2; failed=1; }
+        grep -Fq 'XCURSOR_SIZE = "24"' "$path" || { echo "[INVALID] XCURSOR_SIZE in $path" >&2; failed=1; }
+        grep -Fq 'HYPRCURSOR_THEME = "Bibata-Modern-Amber"' "$path" || { echo "[INVALID] HYPRCURSOR_THEME in $path" >&2; failed=1; }
+        grep -Fq 'HYPRCURSOR_SIZE = "24"' "$path" || { echo "[INVALID] HYPRCURSOR_SIZE in $path" >&2; failed=1; }
+        grep -Fq '/.local/share/icons:/usr/share/icons:/usr/share/pixmaps' "$path" || { echo "[INVALID] XCURSOR_PATH in $path" >&2; failed=1; }
+    done
+    grep -Fq 'set_env("XCURSOR_PATH")' "$HOME/.config/hypr/modules/env.lua" || { echo "[INVALID] Hyprland does not export XCURSOR_PATH" >&2; failed=1; }
+    if grep -REiq 'cursor[^=]*=[[:space:]]*(Adwaita|default)' "$HOME/.config/qt6ct" "$HOME/.config/Kvantum"; then
+        echo "[INVALID] Qt/Kvantum introduces a conflicting cursor theme." >&2
+        failed=1
+    fi
+    if (( APPLY_DESKTOP_SETTINGS )); then
+        [[ "$(gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null)" == "'Bibata-Modern-Amber'" ]] || { echo "[INVALID] gsettings cursor theme" >&2; failed=1; }
+        [[ "$(gsettings get org.gnome.desktop.interface cursor-size 2>/dev/null)" == "24" ]] || { echo "[INVALID] gsettings cursor size" >&2; failed=1; }
+    fi
     kvantum_payload="$(find "$HOME/.config/Kvantum/gruvbox-kvantum" -maxdepth 1 -type f -printf '%f\n' 2>/dev/null | sort)"
     [[ "$kvantum_payload" == $'gruvbox-kvantum.kvconfig\ngruvbox-kvantum.svg' ]] || { echo "[INVALID] incomplete or unexpected Kvantum payload" >&2; failed=1; }
     [[ ! -e "$HOME/.themes/gruvbox-kvantum" ]] || { echo "[INVALID] duplicate nested Kvantum theme was deployed under ~/.themes" >&2; failed=1; }
@@ -1196,6 +1233,7 @@ show_final_checklist() {
     echo "  Configuration deployed: yes"
     echo "  Profile selected: $PROFILE_NAME"
     echo "  Desktop settings: $DESKTOP_SETTINGS_STATUS"
+    echo "  Cursor: Bibata-Modern-Amber at size 24 for Wayland and XWayland"
     echo "  Fish login shell: $FISH_SHELL_STATUS"
     echo "  Torii wallpaper: deployed; wallpaper.sh owns daemon startup/readiness"
     echo "  Waybar: workspaces 1-5 and profile network behavior validated"

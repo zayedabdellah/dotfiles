@@ -26,6 +26,8 @@ and the user-local Oh My Posh installer. The repository supplies JetBrains
 Mono and Bibata assets directly, so separate font/cursor packages are not
 mandatory. `util-linux` supplies `chsh`, `fastfetch` renders the interactive
 Fish system summary, and `jq` provides strict deployed JSON validation.
+The bundled cursor is installed before desktop settings are applied; a missing
+Bibata Xcursor/Hyprcursor payload is a fatal pre-deployment validation error.
 
 ## Optional packages
 
