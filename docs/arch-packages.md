@@ -2,7 +2,7 @@
 
 The default `./install.sh` Arch path installs the following official
 repository packages with `pacman -S --needed` before deployment. The names
-were checked against current Arch package metadata on 2026-07-21.
+were checked against current Arch package metadata on 2026-07-27.
 
 ## Required official packages
 
@@ -17,7 +17,7 @@ grim slurp wl-clipboard brightnessctl playerctl pavucontrol-qt
 networkmanager power-profiles-daemon bluez bluez-utils blueman
 dbus libnotify xorg-xrdb xsettingsd fontconfig iproute2 procps-ng
 coreutils findutils gawk curl unzip xdg-utils xdg-user-dirs
-fastfetch util-linux jq
+fastfetch util-linux jq noto-fonts sddm
 ```
 
 This includes the executables used by Hyprland Lua, Waybar, Fish, scripts,
@@ -26,8 +26,19 @@ and the user-local Oh My Posh installer. The repository supplies JetBrains
 Mono and Bibata assets directly, so separate font/cursor packages are not
 mandatory. `util-linux` supplies `chsh`, `fastfetch` renders the interactive
 Fish system summary, and `jq` provides strict deployed JSON validation.
+`noto-fonts` is the verified official package containing
+`/usr/share/fonts/noto/NotoKufiArabic-Regular.ttf` and the exact Fontconfig
+family `Noto Kufi Arabic`. `sddm` supplies the login manager; Hyprland itself
+supplies the discoverable session entry under `/usr/share/wayland-sessions/`.
 The bundled cursor is installed before desktop settings are applied; a missing
 Bibata Xcursor/Hyprcursor payload is a fatal pre-deployment validation error.
+
+The normal interactive flow offers to enable `sddm.service` for the next boot.
+It verifies the package and Hyprland session, detects enabled GDM, LightDM,
+greetd, Ly, and LXDM units, and requires explicit replacement approval before
+using `systemctl enable --force sddm.service`. It never starts SDDM during the
+installer. Packages-only mode installs both `noto-fonts` and `sddm` but does
+not deploy Fontconfig or change services.
 
 ## Optional packages
 

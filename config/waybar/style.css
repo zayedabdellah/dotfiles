@@ -21,7 +21,7 @@
 /* Global window baseline—completely transparent to remove all black strips */
 window#waybar {
   background: transparent;
-  font-family: "JetBrains Mono", sans-serif;
+  font-family: "JetBrains Mono", "Noto Kufi Arabic", sans-serif;
   font-size: 11pt;
 }
 

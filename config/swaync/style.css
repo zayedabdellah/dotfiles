@@ -9,7 +9,7 @@
 @define-color text_muted #888888;
 
 * {
-    font-family: "JetBrains Mono", sans-serif;
+    font-family: "JetBrains Mono", "Noto Kufi Arabic", sans-serif;
     font-size: 11pt;
 }
 
@@ -38,7 +38,7 @@
 
 /* The wrapper row inside the containers */
 #notification-row {
-    font-family: "JetBrains Mono", sans-serif;
+    font-family: "JetBrains Mono", "Noto Kufi Arabic", sans-serif;
     outline: none;
     margin: 5px;
 }
@@ -59,7 +59,7 @@
 }
 
 #notification-body {
-    font-family: "JetBrains Mono", sans-serif;
+    font-family: "JetBrains Mono", "Noto Kufi Arabic", sans-serif;
     color: #ffffff;
 
     /* FORCE TEXT TO WRAP INSTEAD OF TRUNCATING/CUTTING OFF */
@@ -68,7 +68,7 @@
 }
 
 #notification-title {
-    font-family: "JetBrains Mono", sans-serif;
+    font-family: "JetBrains Mono", "Noto Kufi Arabic", sans-serif;
     color: @torii_orange;
     font-weight: bold;
 

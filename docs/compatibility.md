@@ -30,6 +30,9 @@ app-shells/fish
 app-misc/fastfetch
 sys-apps/util-linux
 app-misc/jq
+media-fonts/noto
+x11-misc/sddm
+gui-libs/display-manager-init
 xfce-base/thunar
 gui-apps/grim
 gui-apps/slurp
@@ -78,6 +81,48 @@ Fastfetch maps to `app-misc/fastfetch` on Gentoo. The installer continues to
 stop before deployment when any other required command lacks a verified
 Gentoo atom; it never passes executable names to `emerge` or edits Portage
 configuration.
+
+## Arabic font resolution
+
+Arch `noto-fonts` and Gentoo `media-fonts/noto` both provide the exact
+Fontconfig family `Noto Kufi Arabic`. The repository-owned user rule is
+installed at:
+
+```text
+~/.config/fontconfig/conf.d/65-noto-kufi-arabic.conf
+```
+
+It prepends Noto Kufi Arabic only when Fontconfig receives an Arabic-language
+sans-serif, serif, or monospace generic request. English generic and terminal
+fonts remain unchanged. CSS/Pango components add the family after JetBrains
+Mono, and Kitty maps Arabic Unicode ranges without changing its primary font.
+Qt6ct and Kvantum remain unchanged and use Fontconfig fallback.
+
+Chromium/Brave and Firefox can use this fallback for browser UI and web content
+that delegates to system fonts. Sites embedding their own webfont remain in
+control. Terminal Arabic shaping, bidi order, and cell width depend on the
+terminal and are not guaranteed to match proportional browser rendering.
+
+## SDDM service handling
+
+Arch uses the official `sddm` package and systemd `sddm.service`. The installer
+requires a valid Hyprland entry under `/usr/share/wayland-sessions/`, never
+starts the greeter during installation, and verifies both SDDM enablement and
+the `display-manager.service` alias. A different enabled display manager is
+left unchanged unless the user explicitly approves replacement.
+
+Gentoo uses `x11-misc/sddm`; the standard OpenRC integration comes from
+`gui-libs/display-manager-init`. On systemd Gentoo, the systemd path is used.
+On OpenRC, the installer preserves unrelated
+`/etc/conf.d/display-manager` content, sets only
+`DISPLAYMANAGER="sddm"`, enables the `display-manager` service for the next
+boot, and verifies both values. Unknown init layouts stop with TTY recovery
+instructions instead of guessing.
+
+The repository owns only `/etc/sddm.conf.d/10-dotfiles.conf`; it selects the
+Bibata cursor at size 24 and contains no autologin, username, or password.
+SDDM keeps its standard theme and default Latin UI font. Noto Kufi Arabic is
+available through the system font package for Arabic fallback.
 
 Optional emulator, overlay, streaming, and MIME modules are disabled by
 default. Arch official packages are installed only when explicitly enabled;

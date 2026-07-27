@@ -15,7 +15,7 @@ configuration {
 @theme "~/.config/rofi/themes/gruvbox-dark-hard.rasi"
 
 * {
-    font: "JetBrains Mono 11";
+    font: "JetBrains Mono, Noto Kufi Arabic 11";
 }
 
 window {

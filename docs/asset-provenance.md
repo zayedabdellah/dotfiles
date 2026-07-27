@@ -7,6 +7,7 @@ installer payload. A `REVIEW` item must be cleared before public redistribution.
 | Asset | Status | Provenance / license | Notes |
 | --- | --- | --- | --- |
 | `fonts/` JetBrains Mono and Nerd Font variants | INCLUDED | SIL Open Font License 1.1; notices retained in `fonts/OFL.txt`, `fonts/fonts/ttf/OFL.txt`, and `fonts/AUTHORS.txt` | Confirm the complete Nerd Fonts attribution/source record before a public release. |
+| Noto Kufi Arabic | DISTRO PACKAGE (NOT BUNDLED) | Google Noto, SIL Open Font License 1.1; supplied by Arch `noto-fonts` or Gentoo `media-fonts/noto` | The repository contains only an authored Fontconfig preference; no Noto font binary or cache is copied. |
 | `themes/gruvbox-dark-gtk/` | INCLUDED | GPLv3; local `LICENSE`; upstream `jmattheis/gruvbox-dark-gtk` | Its README identifies an external icon-theme project, but this repository does not bundle that icon theme. |
 | `icons/Bibata-Modern-Amber/` | INCLUDED | GPL-3.0-only; official upstream `https://github.com/ful1e5/Bibata_Cursor` | The repository contains an upstream-license notice beside the cursor files. `icons/default/index.theme` is repository-authored selector metadata and contains no copied artwork. |
 | `config/rofi/themes/gruvbox-dark-hard.rasi` | INCLUDED | MIT; upstream `https://github.com/bardisty/gruvbox-rofi` | Local MIT notice added beside the theme. |

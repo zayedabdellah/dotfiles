@@ -61,6 +61,10 @@ To set up these dotfiles, follow these steps:
     *   Apply the GTK, icon, cursor, font, Qt6ct, and Kvantum user settings.
     *   Ask once near the beginning about the Fish login shell and required
         NetworkManager, Bluetooth, and power-profile services.
+    *   Install Noto Kufi Arabic, deploy an Arabic-only Fontconfig preference,
+        refresh the user font cache when needed, and verify Arabic resolution.
+    *   Install SDDM and offer to enable it for the next boot without starting
+        or restarting the display manager during installation.
 
     ```bash
     chmod +x install.sh
@@ -99,8 +103,12 @@ explicit targeted runs. Normal no-argument installation automatically applies
 the approved desktop settings; `--apply-desktop-settings` remains available
 for targeted reruns.
 
-The initial flow also asks whether required system services should be enabled
-when needed. It never enables a display manager or unrelated system service.
+The initial flow also asks whether required system services and SDDM should be
+enabled when needed. SDDM defaults to Yes for a normal supported Arch install.
+The installer validates the Hyprland Wayland session first and never starts or
+restarts SDDM in the active session. If GDM, LightDM, greetd, Ly, LXDM, or
+another selected display manager is found, replacement requires separate
+explicit approval; the old package is not removed. Autologin is never enabled.
 Optional official and AUR components remain clearly separated. AUR components
 require an existing helper and explicit approval; no helper is installed.
 
@@ -146,6 +154,54 @@ Fastfetch is deployed to `~/.config/fastfetch/config.jsonc` with its approved
 logo at `~/.config/fastfetch/claude.txt`. Its private-use icons require the
 bundled JetBrains Mono Nerd Font payload. Oh My Posh uses only
 `~/.themes/torii-zayed.omp.json`; no nested duplicate theme is deployed.
+
+### Arabic font fallback
+
+The official distro font package provides the exact family
+`Noto Kufi Arabic` (`noto-fonts` on Arch; `media-fonts/noto` on Gentoo).
+The installer deploys
+`~/.config/fontconfig/conf.d/65-noto-kufi-arabic.conf`, refreshes Fontconfig
+only when the managed font payload or rule changes, and verifies:
+
+```bash
+fc-match "sans-serif:lang=ar"
+fc-match "serif:lang=ar"
+fc-match "monospace:lang=ar"
+```
+
+The rule applies to Arabic-language generic-family requests; it does not
+replace the Latin sans, serif, monospace, or Nerd Font families. Waybar and
+SwayNC retain JetBrains Mono first and add Noto Kufi Arabic as fallback. Rofi
+uses the same Pango family ordering, and Kitty maps Arabic Unicode ranges to
+Noto Kufi Arabic while retaining JetBrains Mono as its terminal font.
+Hyprlock, GTK 3/4, Qt 5/6, Thunar, application dialogs, Chromium/Brave,
+Firefox, and other Fontconfig/Pango clients use the installed system fallback
+without copying browser profiles or replacing their Latin UI font.
+
+Browser interface text and web content that requests system fallback can use
+Noto Kufi Arabic. A website-supplied webfont can override system fallback and
+is intentionally not forced. Kitty can select and shape the fallback through
+HarfBuzz, but terminal cell grids and bidirectional behavior still limit
+Arabic presentation; this installer does not claim browser-quality terminal
+layout.
+
+### SDDM login manager
+
+SDDM uses the standard theme and has no autologin stanza. The installer keeps
+its small fragment at `/etc/sddm.conf.d/10-dotfiles.conf`, where it selects
+`Bibata-Modern-Amber` at size 24. Because the greeter runs as the `sddm`
+system account, the same approved cursor payload is also installed under
+`/usr/share/icons/Bibata-Modern-Amber/`. The system `noto-fonts` package makes
+Noto Kufi Arabic available to the greeter without globally changing SDDM's
+Latin font.
+
+On Arch/systemd, successful setup verifies that
+`display-manager.service` resolves to `sddm.service`; on Gentoo/OpenRC it
+preserves unrelated `/etc/conf.d/display-manager` settings, selects
+`DISPLAYMANAGER="sddm"`, and enables the `display-manager` service. Select
+Hyprland from SDDM's session menu after reboot. If graphical login fails,
+switch to a TTY (for example with Ctrl+Alt+F2), log in, run `Hyprland`
+manually, and inspect the SDDM service logs.
 
 #### Theme Setup Instructions
 
@@ -193,6 +249,8 @@ The following applications are used in these configurations:
 *   **fish**: A smart and user-friendly command line shell.
 *   **Fastfetch**: Interactive system information using the approved Claude logo.
 *   **util-linux / chsh**: Safe login-shell selection and verification support.
+*   **Noto Kufi Arabic**: Arabic-script fallback from the official Noto package.
+*   **SDDM**: Default supported login manager, enabled only with approval for the next boot.
 *   **Papirus-Dark**: Required icon theme for GTK, Qt, xsettingsd, and Rofi fallback.
 
 Rofi preserves Oranchelo as the preferred icon theme without bundling it. The
@@ -225,7 +283,7 @@ Run these commands as the normal VM user:
 
 ```bash
 sudo pacman -S --needed git
-git clone --branch sync-host-2026 --single-branch https://github.com/zayedabdellah/dotfiles.git
+git clone https://github.com/zayedabdellah/dotfiles.git
 cd dotfiles
 git --no-pager log -1 --oneline
 ./install.sh
