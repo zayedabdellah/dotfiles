@@ -376,10 +376,76 @@ check_command() {
 }
 
 noto_kufi_available() {
-    command -v fc-list >/dev/null 2>&1 &&
-        fc-list -f '%{family}\n' | tr ',' '\n' |
-        sed 's/^[[:space:]]*//;s/[[:space:]]*$//' |
-        grep -Fxq 'Noto Kufi Arabic'
+    local listed_family matched_family
+    command -v fc-list >/dev/null 2>&1 || return 1
+    command -v fc-match >/dev/null 2>&1 || return 1
+
+    # Consume the complete fc-list stream. An earlier grep -q pipeline caused
+    # tr/sed to receive SIGPIPE once grep found the family; with pipefail that
+    # made an installed Noto Kufi Arabic font look unavailable on a full cache.
+    listed_family="$(
+        fc-list -f '%{family}\n' : 2>/dev/null |
+            awk -F, '
+                {
+                    for (i = 1; i <= NF; i++) {
+                        family = $i
+                        sub(/^[[:space:]]+/, "", family)
+                        sub(/[[:space:]]+$/, "", family)
+                        if (family == "Noto Kufi Arabic") found = 1
+                    }
+                }
+                END { if (found) print "Noto Kufi Arabic" }
+            '
+    )"
+    [[ "$listed_family" == "Noto Kufi Arabic" ]] || return 1
+
+    matched_family="$(fc-match -f '%{family[0]}' 'Noto Kufi Arabic' 2>/dev/null || true)"
+    [[ "$matched_family" == "Noto Kufi Arabic" ]]
+}
+
+diagnose_noto_kufi_failure() {
+    local output
+    echo "Noto Kufi Arabic diagnostics:" >&2
+    if [[ "$DISTRO_ID" == arch || "$DISTRO_ID" == manjaro ]]; then
+        echo "  pacman -Q noto-fonts:" >&2
+        if command -v pacman >/dev/null 2>&1; then
+            output="$(pacman -Q noto-fonts 2>&1 || true)"
+            printf '    %s\n' "${output:-not installed or pacman returned no result}" >&2
+        else
+            echo "    pacman is unavailable" >&2
+        fi
+    fi
+
+    echo "  fc-list : family (Noto Kufi Arabic matches):" >&2
+    if command -v fc-list >/dev/null 2>&1; then
+        output="$(fc-list : family 2>&1 || true)"
+        output="$(awk 'BEGIN { IGNORECASE = 1 } /Noto Kufi Arabic/' <<<"$output")"
+        printf '    %s\n' "${output:-no matching family}" >&2
+    else
+        echo "    fc-list is unavailable (Arch package: fontconfig)" >&2
+    fi
+
+    for output in 'Noto Kufi Arabic' 'sans-serif:lang=ar'; do
+        echo "  fc-match \"$output\":" >&2
+        if command -v fc-match >/dev/null 2>&1; then
+            printf '    %s\n' "$(fc-match "$output" 2>&1 || true)" >&2
+        else
+            echo "    fc-match is unavailable (Arch package: fontconfig)" >&2
+        fi
+    done
+}
+
+refresh_font_cache_after_packages() {
+    (( CONFIG_ONLY || SKIP_PACKAGES || DRY_RUN || AUDIT_ONLY )) && return 0
+    command -v fc-cache >/dev/null 2>&1 || {
+        echo "Cannot refresh the post-install font cache: fc-cache is missing (Arch package: fontconfig)." >&2
+        return 1
+    }
+    echo "Refreshing Fontconfig cache after package installation..."
+    if ! fc-cache -f; then
+        echo "Fontconfig cache refresh failed after package installation; refusing to validate or deploy fonts." >&2
+        return 1
+    fi
 }
 
 package_for_command() {
@@ -799,10 +865,18 @@ install_optional_arch_packages() {
 }
 
 verify_required_commands() {
-    local failed=0 command_name session_file
+    local failed=0 command_name session_file fontconfig_tools_ready=1
     echo "Verifying mandatory executables..."
     for command_name in "${REQUIRED_COMMANDS[@]}"; do
-        if ! check_command "$command_name"; then failed=1; fi
+        if ! check_command "$command_name"; then
+            failed=1
+            case "$command_name" in
+                fc-cache|fc-list|fc-match)
+                    echo "[MISSING] Fontconfig tool '$command_name' (Arch package: fontconfig; Gentoo: media-libs/fontconfig)." >&2
+                    fontconfig_tools_ready=0
+                    ;;
+            esac
+        fi
     done
     session_file="$(find "$WAYLAND_SESSIONS_DIR" -maxdepth 1 -type f \
         \( -iname 'hyprland.desktop' -o -iname 'hyprland-uwsm.desktop' \) -print -quit 2>/dev/null || true)"
@@ -815,8 +889,9 @@ verify_required_commands() {
     else
         echo "[OK] Hyprland session: $session_file"
     fi
-    if ! noto_kufi_available; then
+    if (( ! fontconfig_tools_ready )) || ! noto_kufi_available; then
         echo "[MISSING] Noto Kufi Arabic is unavailable (Arch: noto-fonts; Gentoo: media-fonts/noto)." >&2
+        diagnose_noto_kufi_failure
         failed=1
     else
         echo "[OK] Font family: Noto Kufi Arabic"
@@ -1744,15 +1819,24 @@ if (( ! CONFIG_ONLY && ! SKIP_PACKAGES )); then
         nixos) echo "NixOS requires declarative Home Manager/NixOS modules; refusing to use an imperative package installer." >&2; exit 1 ;;
     esac
     if [[ "$DISTRO_ID" == arch || "$DISTRO_ID" == manjaro ]]; then install_optional_arch_packages; fi
+    refresh_font_cache_after_packages
 else
     if ((${#MISSING_COMMANDS[@]})); then
         echo "Required commands are missing while package installation is disabled: ${MISSING_COMMANDS[*]}" >&2
+        for command_name in "${MISSING_COMMANDS[@]}"; do
+            case "$command_name" in
+                fc-cache|fc-list|fc-match)
+                    echo "Fontconfig tool '$command_name' is required (Arch package: fontconfig; Gentoo: media-libs/fontconfig)." >&2
+                    ;;
+            esac
+        done
         echo "Use a normal full installation before deploying configuration." >&2
         exit 1
     fi
     if ! noto_kufi_available; then
         echo "Noto Kufi Arabic is required before configuration-only deployment." >&2
         echo "Install noto-fonts on Arch or media-fonts/noto on Gentoo, then retry." >&2
+        diagnose_noto_kufi_failure
         exit 1
     fi
 fi

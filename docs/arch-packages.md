@@ -30,6 +30,12 @@ Fish system summary, and `jq` provides strict deployed JSON validation.
 `/usr/share/fonts/noto/NotoKufiArabic-Regular.ttf` and the exact Fontconfig
 family `Noto Kufi Arabic`. `sddm` supplies the login manager; Hyprland itself
 supplies the discoverable session entry under `/usr/share/wayland-sessions/`.
+After the package transaction completes, the installer runs `fc-cache -f`
+before its mandatory family check, then verifies the regular family through
+both `fc-list` and `fc-match`; it does not require a particular weight,
+filename, or `noto-fonts-extra`. A failed check prints the `noto-fonts` package
+state and the relevant Fontconfig matches before configuration deployment is
+refused. Audit and dry-run modes do not refresh the cache.
 The bundled cursor is installed before desktop settings are applied; a missing
 Bibata Xcursor/Hyprcursor payload is a fatal pre-deployment validation error.
 

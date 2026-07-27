@@ -106,15 +106,46 @@ EOF
     rm -f "$bin/fc-list" "$bin/fc-match" "$bin/fc-cache"
     cat > "$bin/fc-list" <<'EOF'
 #!/bin/sh
-[ "${DOTFILES_NOTO_MISSING:-0}" != 1 ] || exit 0
-printf '%s\n' 'Noto Kufi Arabic' 'JetBrains Mono' 'JetBrainsMono Nerd Font'
+printf '%s\n' "fc-list $*" >> "$DOTFILES_TEST_LOG"
+font_available=1
+font_state="${DOTFILES_FONT_STATE:-$HOME/.mock-font-state}"
+[ "${DOTFILES_NOTO_MISSING:-0}" != 1 ] || font_available=0
+if [ "${DOTFILES_FONT_REQUIRE_PACKAGE:-0}" = 1 ] && [ ! -e "$font_state" ]; then
+    font_available=0
+fi
+if [ "$font_available" = 1 ]; then
+    # Model the regular family supplied by noto-fonts, including the common
+    # comma-separated style alias that must not require noto-fonts-extra.
+    printf '%s\n' 'Noto Kufi Arabic,Noto Kufi Arabic Regular'
+fi
+printf '%s\n' 'JetBrains Mono' 'JetBrainsMono Nerd Font'
+if [ "${DOTFILES_FONT_LARGE_LIST:-0}" = 1 ]; then
+    index=0
+    while [ "$index" -lt 5000 ]; do
+        printf 'Mock Font Family %s\n' "$index"
+        index=$((index + 1))
+    done
+fi
 EOF
     cat > "$bin/fc-match" <<'EOF'
 #!/bin/sh
+printf '%s\n' "fc-match $*" >> "$DOTFILES_TEST_LOG"
+font_available=1
+font_state="${DOTFILES_FONT_STATE:-$HOME/.mock-font-state}"
+[ "${DOTFILES_NOTO_MISSING:-0}" != 1 ] || font_available=0
+if [ "${DOTFILES_FONT_REQUIRE_PACKAGE:-0}" = 1 ] && [ ! -e "$font_state" ]; then
+    font_available=0
+fi
 pattern=
 for argument in "$@"; do pattern="$argument"; done
 case "$pattern" in
-    *lang=ar*) printf '%s' 'Noto Kufi Arabic' ;;
+    *Noto*Kufi*Arabic*|*lang=ar*)
+        if [ "$font_available" = 1 ]; then
+            printf '%s' 'Noto Kufi Arabic'
+        else
+            printf '%s' 'DejaVu Sans'
+        fi
+        ;;
     *monospace*) printf '%s' 'JetBrains Mono' ;;
     *JetBrainsMono*Nerd*) printf '%s' 'JetBrains Mono' ;;
     *) printf '%s' 'JetBrains Mono' ;;
@@ -158,6 +189,18 @@ make_mock_pacman() {
 #!/bin/sh
 printf '%s\n' "pacman $*" >> "$DOTFILES_TEST_LOG"
 if [ "${DOTFILES_PACMAN_FAIL:-0}" = 1 ]; then exit 77; fi
+font_state="${DOTFILES_FONT_STATE:-$HOME/.mock-font-state}"
+if [ "$1" = -Q ] && [ "$2" = noto-fonts ]; then
+    [ -e "$font_state" ] || exit 1
+    printf '%s\n' 'noto-fonts 1:mock-1'
+    exit 0
+fi
+case " $* " in
+    *" -S "*" noto-fonts "*)
+        mkdir -p "$(dirname "$font_state")"
+        : > "$font_state"
+        ;;
+esac
 exit 0
 EOF
     chmod +x "$bin/pacman"
@@ -186,6 +229,7 @@ EOF
     XDG_CONFIG_HOME="$home/.config" \
     DOTFILES_DISTRO_ID=arch \
     DOTFILES_TEST_LOG="$TEST_ROOT/commands.log" \
+    DOTFILES_FONT_STATE="$home/font-state" \
     DOTFILES_SHELLS_FILE="$home/etc-shells" \
     DOTFILES_ACCOUNT_SHELL="$home/account-shell" \
     DOTFILES_SERVICE_STATE="$home/service-state" \
@@ -212,6 +256,7 @@ run_interactive_installer() {
     printf '%b' "$input" |
         HOME="$home" PATH="$bin:/usr/bin:/bin" XDG_CONFIG_HOME="$home/.config" \
         DOTFILES_DISTRO_ID=arch DOTFILES_TEST_LOG="$TEST_ROOT/commands.log" \
+        DOTFILES_FONT_STATE="$home/font-state" \
         DOTFILES_SHELLS_FILE="$home/etc-shells" DOTFILES_ACCOUNT_SHELL="$home/account-shell" \
         DOTFILES_SERVICE_STATE="$home/service-state" DOTFILES_INIT_SYSTEM=systemd \
         DOTFILES_WAYLAND_SESSIONS_DIR="$home/usr/share/wayland-sessions" \
@@ -279,6 +324,7 @@ grep -q 'xdg-desktop-portal-hyprland' "$TEST_ROOT/commands.log"
 grep -q 'fastfetch' "$TEST_ROOT/commands.log"
 grep -q 'util-linux' "$TEST_ROOT/commands.log"
 grep -q 'noto-fonts' "$TEST_ROOT/commands.log"
+grep -q 'fontconfig' "$TEST_ROOT/commands.log"
 grep -q 'sddm' "$TEST_ROOT/commands.log"
 [[ -x "$full_home/.local/bin/oh-my-posh" ]]
 [[ -f "$full_home/.config/hypr/wallpapers/torii.jpg" ]]
@@ -311,7 +357,32 @@ grep -Fq 'font-family: "JetBrains Mono", "Noto Kufi Arabic", sans-serif;' "$full
 grep -Fq 'font-family: "JetBrains Mono", "Noto Kufi Arabic", sans-serif;' "$full_home/.config/swaync/style.css"
 grep -Fq 'font: "JetBrains Mono, Noto Kufi Arabic 11";' "$full_home/.config/rofi/config.rasi"
 grep -Fq 'symbol_map U+0600-U+06FF' "$full_home/.config/kitty/kitty.conf"
-[[ "$(grep -c '^fc-cache -f$' "$TEST_ROOT/commands.log")" == 1 ]]
+[[ "$(grep -c '^fc-cache -f$' "$TEST_ROOT/commands.log")" == 2 ]]
+
+# Model the fresh-VM transition: the regular Noto family is absent initially,
+# pacman supplies it, the cache refresh completes, and only then may family
+# validation run. A large family list reproduces the pipefail/SIGPIPE condition
+# that caused the real false-negative validator result.
+font_transition_home="$TEST_ROOT/font-transition-home"
+font_transition_bin="$TEST_ROOT/font-transition-bin"
+make_mock_bin "$font_transition_bin"
+make_mock_curl "$font_transition_bin"
+make_mock_pacman "$font_transition_bin"
+[[ ! -e "$font_transition_home/font-state" ]]
+: > "$TEST_ROOT/commands.log"
+DOTFILES_FONT_REQUIRE_PACKAGE=1 DOTFILES_FONT_LARGE_LIST=1 \
+    run_installer "$font_transition_home" "$font_transition_bin" \
+    --non-interactive --profile generic >"$TEST_ROOT/font-transition.out" 2>&1
+[[ -e "$font_transition_home/font-state" ]]
+! grep -q '\[MISSING\] Noto Kufi Arabic' "$TEST_ROOT/font-transition.out"
+package_line="$(awk '/^pacman -S .*noto-fonts([[:space:]]|$)/ { print NR; exit }' "$TEST_ROOT/commands.log")"
+cache_line="$(awk '/^fc-cache -f$/ { print NR; exit }' "$TEST_ROOT/commands.log")"
+font_list_line="$(awk '/^fc-list / { print NR; exit }' "$TEST_ROOT/commands.log")"
+font_match_line="$(awk '/^fc-match .*Noto Kufi Arabic/ { print NR; exit }' "$TEST_ROOT/commands.log")"
+[[ -n "$package_line" && -n "$cache_line" && -n "$font_list_line" && -n "$font_match_line" ]]
+(( package_line < cache_line && cache_line < font_list_line && font_list_line < font_match_line ))
+grep -q 'noto-fonts' "$TEST_ROOT/commands.log"
+! grep -q 'noto-fonts-extra' "$TEST_ROOT/commands.log"
 
 if command -v script >/dev/null 2>&1; then
     noarg_home="$TEST_ROOT/noarg-home"
@@ -683,6 +754,7 @@ if DOTFILES_PACMAN_FAIL=1 run_installer "$failure_home" "$failure_bin" --non-int
     exit 1
 fi
 [[ ! -e "$failure_home/.config/hypr/hyprland.lua" ]]
+! grep -q '^fc-cache ' "$TEST_ROOT/commands.log"
 
 missing_session_home="$TEST_ROOT/missing-session-home"
 if DOTFILES_NO_HYPRLAND_SESSION=1 run_installer "$missing_session_home" "$full_bin" \
@@ -704,6 +776,8 @@ run_installer "$packages_only_home" "$full_bin" --non-interactive --profile gene
 [[ ! -e "$packages_only_home/.config/fontconfig" ]]
 [[ ! -e "$packages_only_home/etc/sddm.conf.d/10-dotfiles.conf" ]]
 grep -q 'noto-fonts' "$TEST_ROOT/commands.log"
+grep -q 'fontconfig' "$TEST_ROOT/commands.log"
+[[ "$(grep -c '^fc-cache -f$' "$TEST_ROOT/commands.log")" == 1 ]]
 grep -q 'sddm' "$TEST_ROOT/commands.log"
 ! grep -q 'systemctl enable.*sddm' "$TEST_ROOT/commands.log"
 ! grep -q '^chsh ' "$TEST_ROOT/commands.log"
@@ -732,7 +806,34 @@ if DOTFILES_NOTO_MISSING=1 run_installer "$missing_font_home" "$full_bin" \
     exit 1
 fi
 grep -q 'Noto Kufi Arabic is required' "$TEST_ROOT/missing-font.out"
+grep -q 'pacman -Q noto-fonts' "$TEST_ROOT/missing-font.out"
+grep -q 'fc-list : family' "$TEST_ROOT/missing-font.out"
+grep -q 'fc-match "Noto Kufi Arabic"' "$TEST_ROOT/missing-font.out"
+grep -q 'fc-match "sans-serif:lang=ar"' "$TEST_ROOT/missing-font.out"
 [[ ! -e "$missing_font_home/.config/fontconfig" ]]
+
+for missing_font_tool in fc-cache fc-list fc-match; do
+    missing_font_tool_home="$TEST_ROOT/missing-$missing_font_tool-home"
+    missing_font_tool_bin="$TEST_ROOT/missing-$missing_font_tool-bin"
+    make_mock_bin "$missing_font_tool_bin"
+    rm -f "$missing_font_tool_bin/$missing_font_tool"
+    for utility in dirname id grep find sort jq awk sed mktemp mkdir cp cmp date tee; do
+        [[ -e "$missing_font_tool_bin/$utility" ]] ||
+            ln -s "$(command -v "$utility")" "$missing_font_tool_bin/$utility"
+    done
+    mkdir -p "$missing_font_tool_home"
+    if HOME="$missing_font_tool_home" PATH="$missing_font_tool_bin" \
+        XDG_CONFIG_HOME="$missing_font_tool_home/.config" DOTFILES_DISTRO_ID=arch \
+        DOTFILES_TEST_LOG="$TEST_ROOT/commands.log" \
+        /usr/bin/bash "$ROOT/install.sh" --non-interactive --profile generic \
+        --config-only >"$TEST_ROOT/missing-$missing_font_tool.out" 2>&1; then
+        echo "missing $missing_font_tool unexpectedly passed installation validation" >&2
+        exit 1
+    fi
+    grep -qi "$missing_font_tool" "$TEST_ROOT/missing-$missing_font_tool.out"
+    grep -qi 'Arch package: fontconfig' "$TEST_ROOT/missing-$missing_font_tool.out"
+    [[ ! -e "$missing_font_tool_home/.config/hypr/hyprland.lua" ]]
+done
 
 shell_home="$TEST_ROOT/shell-home"
 mkdir -p "$shell_home"
@@ -834,7 +935,7 @@ font_cache_count_before_repeat="$(grep -c '^fc-cache -f$' "$TEST_ROOT/commands.l
 run_installer "$repeat_home" "$full_bin" --non-interactive --profile generic >/dev/null
 backup_count_after_repeat="$(find "$repeat_home/.local/state/dotfiles/backups" -name manifest.tsv -type f | wc -l)"
 [[ "$backup_count_before_repeat" == "$backup_count_after_repeat" ]]
-[[ "$(grep -c '^fc-cache -f$' "$TEST_ROOT/commands.log" || true)" == "$font_cache_count_before_repeat" ]]
+[[ "$(grep -c '^fc-cache -f$' "$TEST_ROOT/commands.log" || true)" == "$((font_cache_count_before_repeat + 1))" ]]
 
 kvantum_home="$TEST_ROOT/kvantum-home"
 mkdir -p "$kvantum_home/.config/Kvantum"
