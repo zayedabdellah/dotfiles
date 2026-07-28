@@ -41,6 +41,7 @@ AUR_INSTALL_APPROVED=0
 FISH_SHELL_STATUS="unchanged"
 DESKTOP_SETTINGS_STATUS="not requested"
 SYSTEM_SERVICES_STATUS="not requested"
+TAILSCALE_TRAY_VALIDATION_STATUS="not run"
 SDDM_STATUS="not requested"
 SDDM_DISPLAY_MANAGER_STATUS="not inspected"
 VALIDATION_STATUS="not run"
@@ -209,7 +210,7 @@ ARCH_REQUIRED_PACKAGES=(
     polkit hyprpolkitagent gtk3 gtk4 gsettings-desktop-schemas qt6ct qt6-wayland qt5-wayland kvantum
     papirus-icon-theme thunar thunar-volman tumbler mpv btop mangohud cava
     grim slurp wl-clipboard brightnessctl playerctl pavucontrol-qt
-    networkmanager power-profiles-daemon bluez bluez-utils blueman
+    networkmanager power-profiles-daemon bluez bluez-utils blueman tailscale
     dbus libnotify xorg-xrdb xsettingsd fontconfig iproute2 procps-ng
     coreutils findutils gawk curl unzip xdg-utils xdg-user-dirs
     fastfetch util-linux jq noto-fonts sddm
@@ -257,7 +258,11 @@ declare -A ARCH_COMMAND_PACKAGE=(
     [pavucontrol-qt]=pavucontrol-qt
     [nmtui]=networkmanager
     [nmcli]=networkmanager
+    [bluetoothctl]=bluez-utils
+    [blueman-manager]=blueman
     [blueman-applet]=blueman
+    [tailscale]=tailscale
+    [tailscaled]=tailscale
     [powerprofilesctl]=power-profiles-daemon
     [xrdb]=xorg-xrdb
     [notify-send]=libnotify
@@ -315,7 +320,11 @@ declare -A GENTOO_COMMAND_PACKAGE=(
     [pavucontrol-qt]=media-sound/pavucontrol-qt
     [nmtui]=net-misc/networkmanager
     [nmcli]=net-misc/networkmanager
+    [bluetoothctl]=net-wireless/bluez
+    [blueman-manager]=net-wireless/blueman
     [blueman-applet]=net-wireless/blueman
+    [tailscale]=net-vpn/tailscale
+    [tailscaled]=net-vpn/tailscale
     [pipewire]=media-video/pipewire
     [wireplumber]=media-video/wireplumber
     [wpctl]=media-video/pipewire
@@ -332,6 +341,9 @@ declare -A GENTOO_COMMAND_PACKAGE=(
 GENTOO_REQUIRED_ATOMS=(
     media-fonts/noto
     x11-misc/sddm
+    net-vpn/tailscale
+    net-wireless/bluez
+    net-wireless/blueman
 )
 GENTOO_OPENRC_REQUIRED_ATOM=gui-libs/display-manager-init
 declare -A GENTOO_USE_FLAGS=(
@@ -352,7 +364,8 @@ REQUIRED_COMMANDS=(
     Hyprland waybar swaync fish chsh getent fastfetch sddm jq kitty rofi hyprlock hypridle awww awww-daemon
     pipewire wireplumber wpctl hyprpolkitagent qt6ct kvantummanager thunar mpv btop mangohud cava
     grim slurp wl-copy brightnessctl playerctl pavucontrol-qt nmtui nmcli
-    blueman-applet powerprofilesctl xrdb notify-send xsettingsd fc-cache fc-list fc-match ip
+    bluetoothctl blueman-manager blueman-applet tailscale tailscaled
+    powerprofilesctl xrdb notify-send xsettingsd fc-cache fc-list fc-match ip
     curl unzip gsettings xdg-user-dirs-update
 )
 
@@ -665,17 +678,6 @@ collect_interactive_choices() {
     fi
 
     if (( ORIGINAL_ARGUMENT_COUNT == 0 )); then
-        read -r -p "Enable required system services (NetworkManager, Bluetooth, power profiles) if needed? [Y/n] " reply
-        if [[ -z "$reply" || "$reply" =~ ^[Yy]$ ]]; then
-            SYSTEM_SERVICES_DECISION="yes"
-        else
-            SYSTEM_SERVICES_DECISION="no"
-        fi
-    else
-        SYSTEM_SERVICES_DECISION="no"
-    fi
-
-    if (( ORIGINAL_ARGUMENT_COUNT == 0 )); then
         read -r -p "Configure and enable SDDM for the next boot? [Y/n] " reply
         if [[ -z "$reply" || "$reply" =~ ^[Yy]$ ]]; then
             SDDM_DECISION="yes"
@@ -695,6 +697,26 @@ collect_interactive_choices() {
         fi
     else
         SDDM_DECISION="no"
+    fi
+}
+
+collect_system_services_choice() {
+    local reply init_system
+    if (( AUDIT_ONLY || DRY_RUN || PACKAGES_ONLY )) || [[ "$SYSTEM_SERVICES_DECISION" == no ]]; then
+        return 0
+    fi
+    if (( NON_INTERACTIVE )) || (( ORIGINAL_ARGUMENT_COUNT != 0 )); then
+        SYSTEM_SERVICES_DECISION="no"
+        return 0
+    fi
+
+    init_system="$(detect_init_system)"
+    echo "Detected init system after package validation: $init_system"
+    read -r -p "Enable and safely start required services (NetworkManager, Bluetooth, Tailscale, power profiles) if needed? [Y/n] " reply
+    if [[ -z "$reply" || "$reply" =~ ^[Yy]$ ]]; then
+        SYSTEM_SERVICES_DECISION="yes"
+    else
+        SYSTEM_SERVICES_DECISION="no"
     fi
 }
 
@@ -748,7 +770,8 @@ show_summary() {
     echo "  Kvantum: gruvbox-kvantum under ~/.config/Kvantum/gruvbox-kvantum"
     echo "  Desktop settings: $([[ "$APPLY_DESKTOP_SETTINGS" == 1 ]] && echo apply || echo unchanged)"
     echo "  Fish login shell: ${FISH_SHELL_DECISION:-unchanged}"
-    echo "  System services: ${SYSTEM_SERVICES_DECISION:-unchanged}"
+    echo "  System services: ${SYSTEM_SERVICES_DECISION:-approval requested after package validation}"
+    echo "    Approval covers Bluetooth and Tailscale daemon enablement; it never runs tailscale up."
     echo "  Login manager: SDDM package mandatory; enable next boot: ${SDDM_DECISION:-no}"
     if ((${#SDDM_CONFLICTS[@]})); then echo "  Display-manager conflict: ${SDDM_CONFLICTS[*]}"; fi
     if ((${#SDDM_OTHER_INSTALLED[@]})); then echo "  Other display-manager installation/configuration detected: ${SDDM_OTHER_INSTALLED[*]}"; fi
@@ -865,7 +888,7 @@ install_optional_arch_packages() {
 }
 
 verify_required_commands() {
-    local failed=0 command_name session_file fontconfig_tools_ready=1
+    local failed=0 command_name session_file fontconfig_tools_ready=1 systray_help
     echo "Verifying mandatory executables..."
     for command_name in "${REQUIRED_COMMANDS[@]}"; do
         if ! check_command "$command_name"; then
@@ -874,6 +897,15 @@ verify_required_commands() {
                 fc-cache|fc-list|fc-match)
                     echo "[MISSING] Fontconfig tool '$command_name' (Arch package: fontconfig; Gentoo: media-libs/fontconfig)." >&2
                     fontconfig_tools_ready=0
+                    ;;
+                blueman-applet)
+                    echo "[MISSING] Blueman tray applet is mandatory (Arch: blueman; Gentoo: net-wireless/blueman)." >&2
+                    ;;
+                blueman-manager)
+                    echo "[MISSING] Blueman Manager is mandatory (Arch: blueman; Gentoo: net-wireless/blueman)." >&2
+                    ;;
+                tailscale|tailscaled)
+                    echo "[MISSING] Tailscale client/daemon executable '$command_name' is mandatory (Arch: tailscale; Gentoo: net-vpn/tailscale)." >&2
                     ;;
             esac
         fi
@@ -895,6 +927,18 @@ verify_required_commands() {
         failed=1
     else
         echo "[OK] Font family: Noto Kufi Arabic"
+    fi
+    if have_command tailscale; then
+        if systray_help="$(tailscale systray --help 2>&1)" &&
+            [[ "$systray_help" == *systray* || "$systray_help" == *Systray* || "$systray_help" == *"system tray"* ]]; then
+            echo "[OK] Tailscale graphical tray command: tailscale systray"
+            TAILSCALE_TRAY_VALIDATION_STATUS="supported (tailscale systray --help)"
+        else
+            echo "[UNSUPPORTED] Installed Tailscale does not support 'tailscale systray'." >&2
+            echo "Tailscale 1.88 or newer is required; no substitute tray command was configured." >&2
+            TAILSCALE_TRAY_VALIDATION_STATUS="unsupported"
+            failed=1
+        fi
     fi
     if (( failed )); then
         echo "Mandatory components are still missing; refusing to deploy configuration." >&2
@@ -1384,7 +1428,7 @@ apply_desktop_settings() {
 }
 
 configure_system_services() {
-    local service
+    local service init_system command_failed=0 inactive_services=()
     if (( AUDIT_ONLY || DRY_RUN )); then
         return 0
     fi
@@ -1392,25 +1436,85 @@ configure_system_services() {
         SYSTEM_SERVICES_STATUS="unchanged (declined or not requested)"
         return 0
     fi
-    command -v systemctl >/dev/null 2>&1 || {
-        echo "systemctl is unavailable; required Arch system services could not be configured." >&2
-        return 1
-    }
-    for service in NetworkManager.service bluetooth.service power-profiles-daemon.service; do
-        if systemctl is-enabled "$service" >/dev/null 2>&1 && systemctl is-active "$service" >/dev/null 2>&1; then
-            continue
-        fi
-        echo "Enabling required service: $service"
-        run_privileged systemctl enable --now "$service" || {
-            echo "Failed to enable required service $service." >&2
+    init_system="$(detect_init_system)"
+    case "$init_system" in
+        systemd)
+            command -v systemctl >/dev/null 2>&1 || {
+                echo "systemctl is unavailable; required systemd services could not be configured." >&2
+                return 1
+            }
+            for service in NetworkManager.service bluetooth.service tailscaled.service power-profiles-daemon.service; do
+                if ! systemctl list-unit-files "$service" --no-legend 2>/dev/null | grep -q "^$service[[:space:]]"; then
+                    echo "Required service is unavailable after package installation: $service" >&2
+                    [[ "$service" != tailscaled.service ]] ||
+                        echo "Tailscale is installed but tailscaled.service is unavailable." >&2
+                    return 1
+                fi
+                if systemctl is-enabled "$service" >/dev/null 2>&1 &&
+                    systemctl is-active "$service" >/dev/null 2>&1; then
+                    continue
+                fi
+                echo "Enabling and starting approved service: $service"
+                if ! run_privileged systemctl enable --now "$service"; then
+                    command_failed=1
+                    if ! systemctl is-enabled "$service" >/dev/null 2>&1; then
+                        echo "Failed to enable required service $service; it remains unchanged." >&2
+                        return 1
+                    fi
+                    echo "Warning: $service was enabled but could not be started; it should start after reboot." >&2
+                fi
+                if ! systemctl is-enabled "$service" >/dev/null 2>&1; then
+                    echo "Service verification failed: $service is not enabled." >&2
+                    return 1
+                fi
+                if ! systemctl is-active "$service" >/dev/null 2>&1; then
+                    inactive_services+=("$service")
+                    echo "Warning: $service is enabled but not active; it will start after reboot." >&2
+                fi
+            done
+            ;;
+        openrc)
+            command -v rc-update >/dev/null 2>&1 && command -v rc-service >/dev/null 2>&1 || {
+                echo "OpenRC tools are unavailable; required services could not be configured." >&2
+                return 1
+            }
+            for service in NetworkManager bluetooth tailscaled power-profiles-daemon; do
+                if ! rc-service --exists "$service" >/dev/null 2>&1; then
+                    echo "Required OpenRC service is unavailable after package installation: $service" >&2
+                    [[ "$service" != tailscaled ]] ||
+                        echo "Tailscale is installed but the tailscaled OpenRC service is unavailable." >&2
+                    return 1
+                fi
+                if ! rc-update show default 2>/dev/null |
+                    grep -Eq "(^|[[:space:]])$service([[:space:]]|$)"; then
+                    echo "Enabling approved OpenRC service: $service"
+                    run_privileged rc-update add "$service" default || {
+                        echo "Failed to enable required OpenRC service $service; it remains unchanged." >&2
+                        return 1
+                    }
+                fi
+                if ! rc-service "$service" status >/dev/null 2>&1; then
+                    echo "Starting approved OpenRC service: $service"
+                    if ! run_privileged rc-service "$service" start; then
+                        command_failed=1
+                        inactive_services+=("$service")
+                        echo "Warning: $service is enabled but could not be started; it should start after reboot." >&2
+                    fi
+                fi
+            done
+            ;;
+        *)
+            echo "Unsupported init system; Bluetooth and Tailscale services were not modified." >&2
             return 1
-        }
-        systemctl is-enabled "$service" >/dev/null 2>&1 || {
-            echo "Service verification failed: $service is not enabled." >&2
-            return 1
-        }
-    done
-    SYSTEM_SERVICES_STATUS="NetworkManager, Bluetooth, and power profiles enabled"
+            ;;
+    esac
+    if ((${#inactive_services[@]})); then
+        SYSTEM_SERVICES_STATUS="enabled for boot; inactive until reboot: ${inactive_services[*]}"
+    elif (( command_failed )); then
+        SYSTEM_SERVICES_STATUS="enabled with start warnings"
+    else
+        SYSTEM_SERVICES_STATUS="NetworkManager, Bluetooth, Tailscale, and power profiles enabled and active"
+    fi
 }
 
 find_hyprland_session() {
@@ -1760,6 +1864,8 @@ show_final_checklist() {
     echo "  Fish login shell: $FISH_SHELL_STATUS"
     echo "  Torii wallpaper: deployed; wallpaper.sh owns daemon startup/readiness"
     echo "  Waybar: workspaces 1-5 and profile network behavior validated"
+    echo "  Tray executables: Blueman and Tailscale validated; graphical icons require a real Hyprland session"
+    echo "  Tailscale tray command: $TAILSCALE_TRAY_VALIDATION_STATUS"
     echo "  Fastfetch: config and Claude logo validated"
     echo "  Oh My Posh: pinned binary accepted the synchronized theme"
     echo "  Kvantum: gruvbox-kvantum discovered in the user theme directory and selected"
@@ -1776,9 +1882,16 @@ show_final_checklist() {
     echo "Remaining manual steps"
     local manual_steps=0
     if [[ "$SYSTEM_SERVICES_STATUS" == unchanged* ]]; then
-        echo "  - Enable any required NetworkManager, Bluetooth, or power-profile service that you declined."
+        echo "  - Enable any required NetworkManager, Bluetooth, Tailscale, or power-profile service that you declined."
         manual_steps=1
     fi
+    if [[ "$SYSTEM_SERVICES_STATUS" == *inactive* || "$SYSTEM_SERVICES_STATUS" == *warnings* ]]; then
+        echo "  - Reboot, then verify the enabled services are active."
+        manual_steps=1
+    fi
+    echo "  - Authenticate Tailscale manually with 'tailscale up' or through its tray interface; the installer did not authenticate."
+    echo "  - Confirm both StatusNotifier tray icons in a fresh graphical Hyprland session."
+    manual_steps=1
     if [[ "$SDDM_STATUS" != *enabled* ]]; then
         echo "  - SDDM was not enabled; log in on a TTY and run Hyprland manually, or rerun a normal interactive installation."
         manual_steps=1
@@ -1841,7 +1954,7 @@ else
     fi
 fi
 
-if [[ "$DISTRO_ID" == arch || "$DISTRO_ID" == manjaro ]]; then
+if [[ "$DISTRO_ID" == arch || "$DISTRO_ID" == manjaro || "$DISTRO_ID" == gentoo ]]; then
     collect_missing
     verify_required_commands
 fi
@@ -1851,6 +1964,8 @@ if (( PACKAGES_ONLY )); then
     echo "Package installation and verification complete; configuration was not deployed."
     exit 0
 fi
+
+collect_system_services_choice
 
 install_oh_my_posh
 

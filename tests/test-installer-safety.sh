@@ -12,10 +12,24 @@ make_mock_bin() {
     for command_name in Hyprland hyprland waybar swaync fish kitty rofi hyprlock hypridle \
         awww awww-daemon pipewire wireplumber wpctl hyprpolkitagent thunar mpv btop \
         mangohud cava grim slurp wl-copy brightnessctl playerctl pavucontrol-qt nmtui \
-        nmcli blueman-applet powerprofilesctl xrdb notify-send xsettingsd fc-cache ip \
+        nmcli bluetoothctl blueman-manager blueman-applet tailscaled powerprofilesctl \
+        xrdb notify-send xsettingsd fc-cache ip \
         curl unzip pacman fastfetch sddm gsettings xdg-user-dirs-update; do
         ln -s /bin/true "$bin/$command_name"
     done
+    cat > "$bin/tailscale" <<'EOF'
+#!/bin/sh
+if [ "$1" = systray ] && [ "$2" = --help ]; then
+    [ "${DOTFILES_TAILSCALE_NO_SYSTRAY:-0}" != 1 ] || {
+        printf '%s\n' 'unknown subcommand: systray' >&2
+        exit 2
+    }
+    printf '%s\n' 'Run the Linux system tray (systray) application.'
+    exit 0
+fi
+printf '%s\n' "tailscale $*" >> "$DOTFILES_TEST_LOG"
+exit 0
+EOF
     cat > "$bin/sudo" <<'EOF'
 #!/bin/sh
 printf '%s\n' "sudo $*" >> "$DOTFILES_TEST_LOG"
@@ -39,11 +53,20 @@ EOF
     cat > "$bin/systemctl" <<'EOF'
 #!/bin/sh
 case "$1" in
-    is-enabled|is-active)
+    is-enabled)
         [ -e "$DOTFILES_SERVICE_STATE/$2" ]
         ;;
+    is-active)
+        [ -e "$DOTFILES_SERVICE_STATE/active-$2" ]
+        ;;
     list-unit-files)
-        if [ -e "$DOTFILES_SERVICE_STATE/installed-$2" ] || [ -e "$DOTFILES_SERVICE_STATE/$2" ]; then
+        if [ "${DOTFILES_MISSING_SERVICE:-}" != "$2" ] &&
+            { [ -e "$DOTFILES_SERVICE_STATE/installed-$2" ] ||
+              [ -e "$DOTFILES_SERVICE_STATE/$2" ] ||
+              [ "$2" = NetworkManager.service ] ||
+              [ "$2" = bluetooth.service ] ||
+              [ "$2" = tailscaled.service ] ||
+              [ "$2" = power-profiles-daemon.service ]; }; then
             printf '%s enabled\n' "$2"
         fi
         ;;
@@ -53,8 +76,15 @@ case "$1" in
         [ "${DOTFILES_SDDM_ENABLE_FAIL:-0}" != 1 ] || {
             [ "$service" != sddm.service ] || exit 79
         }
+        [ "${DOTFILES_SYSTEMCTL_FAIL_SERVICE:-}" != "$service" ] || exit 81
         mkdir -p "$DOTFILES_SERVICE_STATE"
         : > "$DOTFILES_SERVICE_STATE/$service"
+        : > "$DOTFILES_SERVICE_STATE/active-$service"
+        if [ "${DOTFILES_SYSTEMCTL_START_FAIL_SERVICE:-}" = "$service" ]; then
+            rm -f "$DOTFILES_SERVICE_STATE/active-$service"
+            printf '%s\n' "systemctl $*" >> "$DOTFILES_TEST_LOG"
+            exit 82
+        fi
         if [ "$service" = sddm.service ]; then
             mkdir -p "$(dirname "$DOTFILES_DISPLAY_MANAGER_LINK")" "$(dirname "$DOTFILES_SDDM_UNIT")"
             : > "$DOTFILES_SDDM_UNIT"
@@ -72,7 +102,7 @@ case "$1" in
     disable)
         service="$2"
         [ "${DOTFILES_SDDM_DISABLE_FAIL:-0}" != 1 ] || exit 80
-        rm -f "$DOTFILES_SERVICE_STATE/$service"
+        rm -f "$DOTFILES_SERVICE_STATE/$service" "$DOTFILES_SERVICE_STATE/active-$service"
         printf '%s\n' "systemctl $*" >> "$DOTFILES_TEST_LOG"
         ;;
     *)
@@ -101,7 +131,7 @@ EOF
 printf '%s\n' "fastfetch $*" >> "$DOTFILES_TEST_LOG"
 [ "${DOTFILES_FASTFETCH_FAIL:-0}" != 1 ]
 EOF
-    chmod +x "$bin/getent" "$bin/chsh" "$bin/systemctl" "$bin/gsettings" \
+    chmod +x "$bin/tailscale" "$bin/getent" "$bin/chsh" "$bin/systemctl" "$bin/gsettings" \
         "$bin/xdg-user-dirs-update" "$bin/fastfetch"
     rm -f "$bin/fc-list" "$bin/fc-match" "$bin/fc-cache"
     cat > "$bin/fc-list" <<'EOF'
@@ -240,6 +270,7 @@ EOF
     DOTFILES_SYSTEMD_SYSTEM_DIR="$home/etc/systemd/system" \
     DOTFILES_DISPLAY_MANAGER_LINK="$home/etc/systemd/system/display-manager.service" \
     DOTFILES_SDDM_UNIT="$home/usr/lib/systemd/system/sddm.service" \
+    DOTFILES_TAILSCALE_NO_SYSTRAY="${DOTFILES_TAILSCALE_NO_SYSTRAY:-0}" \
     bash "$ROOT/install.sh" "$@"
 }
 
@@ -267,6 +298,9 @@ run_interactive_installer() {
         DOTFILES_SDDM_UNIT="$home/usr/lib/systemd/system/sddm.service" \
         DOTFILES_SDDM_ENABLE_FAIL="${DOTFILES_SDDM_ENABLE_FAIL:-0}" \
         DOTFILES_SDDM_DISABLE_FAIL="${DOTFILES_SDDM_DISABLE_FAIL:-0}" \
+        DOTFILES_SYSTEMCTL_FAIL_SERVICE="${DOTFILES_SYSTEMCTL_FAIL_SERVICE:-}" \
+        DOTFILES_SYSTEMCTL_START_FAIL_SERVICE="${DOTFILES_SYSTEMCTL_START_FAIL_SERVICE:-}" \
+        DOTFILES_MISSING_SERVICE="${DOTFILES_MISSING_SERVICE:-}" \
         script -qec "bash '$ROOT/install.sh'" /dev/null
 }
 
@@ -326,6 +360,13 @@ grep -q 'util-linux' "$TEST_ROOT/commands.log"
 grep -q 'noto-fonts' "$TEST_ROOT/commands.log"
 grep -q 'fontconfig' "$TEST_ROOT/commands.log"
 grep -q 'sddm' "$TEST_ROOT/commands.log"
+grep -q 'bluez' "$TEST_ROOT/commands.log"
+grep -q 'bluez-utils' "$TEST_ROOT/commands.log"
+grep -q 'blueman' "$TEST_ROOT/commands.log"
+grep -q 'tailscale' "$TEST_ROOT/commands.log"
+arch_package_block="$(sed -n '/^ARCH_REQUIRED_PACKAGES=(/,/^)/p' "$ROOT/install.sh")"
+[[ "$(grep -oE '(^|[[:space:]])bluez([[:space:]]|$)' <<<"$arch_package_block" | wc -l)" == 1 ]]
+[[ "$(grep -oE '(^|[[:space:]])bluez-utils([[:space:]]|$)' <<<"$arch_package_block" | wc -l)" == 1 ]]
 [[ -x "$full_home/.local/bin/oh-my-posh" ]]
 [[ -f "$full_home/.config/hypr/wallpapers/torii.jpg" ]]
 [[ -f "$full_home/.config/fastfetch/config.jsonc" ]]
@@ -399,7 +440,7 @@ if command -v script >/dev/null 2>&1; then
         > "$noarg_home/usr/share/wayland-sessions/hyprland.desktop"
     : > "$TEST_ROOT/commands.log"
     noarg_output="$(
-        printf '1\n\n\n\n\ny\n\n' |
+        printf '1\n\n\n\ny\n\n\n' |
             HOME="$noarg_home" PATH="$noarg_bin:/usr/bin:/bin" \
             XDG_CONFIG_HOME="$noarg_home/.config" DOTFILES_DISTRO_ID=arch \
             DOTFILES_TEST_LOG="$TEST_ROOT/commands.log" \
@@ -417,18 +458,25 @@ if command -v script >/dev/null 2>&1; then
     )"
     grep -q "Make Fish the default shell for $(id -un)? \\[Y/n\\]" <<<"$noarg_output"
     grep -q 'Optional module names, separated by spaces' <<<"$noarg_output"
-    grep -q 'Enable required system services' <<<"$noarg_output"
+    grep -q 'Enable and safely start required services.*Bluetooth, Tailscale' <<<"$noarg_output"
+    grep -q 'Detected init system after package validation: systemd' <<<"$noarg_output"
+    package_output_line="$(grep -n 'Installing required official Arch packages' <<<"$noarg_output" | cut -d: -f1)"
+    service_prompt_line="$(grep -n 'Enable and safely start required services' <<<"$noarg_output" | cut -d: -f1)"
+    [[ -n "$package_output_line" && -n "$service_prompt_line" ]]
+    (( package_output_line < service_prompt_line ))
     grep -q 'Configure and enable SDDM for the next boot' <<<"$noarg_output"
     grep -q 'SDDM will start at the next reboot' <<<"$noarg_output"
     grep -q 'Final installation checklist' <<<"$noarg_output"
     grep -q 'Log out and back in, or reboot' <<<"$noarg_output"
     grep -q 'Remaining manual steps' <<<"$noarg_output"
-    grep -q '  None.' <<<"$noarg_output"
+    grep -q "Authenticate Tailscale manually with 'tailscale up'" <<<"$noarg_output"
     grep -q 'gsettings set org.gnome.desktop.interface gtk-theme gruvbox-dark-gtk' "$TEST_ROOT/commands.log"
     grep -q 'gsettings set org.gnome.desktop.interface cursor-theme Bibata-Modern-Amber' "$TEST_ROOT/commands.log"
     grep -q 'gsettings set org.gnome.desktop.interface cursor-size 24' "$TEST_ROOT/commands.log"
     grep -q 'xdg-user-dirs-update' "$TEST_ROOT/commands.log"
     grep -q 'systemctl enable --now NetworkManager.service' "$TEST_ROOT/commands.log"
+    grep -q 'systemctl enable --now bluetooth.service' "$TEST_ROOT/commands.log"
+    grep -q 'systemctl enable --now tailscaled.service' "$TEST_ROOT/commands.log"
     grep -q 'systemctl enable --force sddm.service' "$TEST_ROOT/commands.log"
     ! grep -Eq 'systemctl (start|restart).*sddm' "$TEST_ROOT/commands.log"
     grep -q "chsh -s $noarg_bin/fish $(id -un)" "$TEST_ROOT/commands.log"
@@ -442,6 +490,12 @@ if command -v script >/dev/null 2>&1; then
     grep -Fxq 'CursorSize=24' "$noarg_home/etc/sddm.conf.d/10-dotfiles.conf"
     [[ -f "$noarg_home/usr/share/icons/Bibata-Modern-Amber/cursors/left_ptr" ]]
     [[ "$(basename "$(readlink "$noarg_home/etc/systemd/system/display-manager.service")")" == sddm.service ]]
+    tailscaled_enable_count="$(grep -c '^systemctl enable --now tailscaled.service$' "$TEST_ROOT/commands.log")"
+    bluetooth_enable_count="$(grep -c '^systemctl enable --now bluetooth.service$' "$TEST_ROOT/commands.log")"
+    run_interactive_installer "$noarg_home" "$noarg_bin" \
+        '1\n\nn\n\ny\n\n' >/dev/null
+    [[ "$(grep -c '^systemctl enable --now tailscaled.service$' "$TEST_ROOT/commands.log")" == "$tailscaled_enable_count" ]]
+    [[ "$(grep -c '^systemctl enable --now bluetooth.service$' "$TEST_ROOT/commands.log")" == "$bluetooth_enable_count" ]]
 
     decline_home="$TEST_ROOT/decline-home"
     decline_bin="$TEST_ROOT/decline-bin"
@@ -456,7 +510,7 @@ if command -v script >/dev/null 2>&1; then
     printf '%s\n' '[Desktop Entry]' 'Name=Hyprland' 'Exec=Hyprland' 'Type=Application' \
         > "$decline_home/usr/share/wayland-sessions/hyprland.desktop"
     : > "$TEST_ROOT/commands.log"
-    printf '1\n\nn\nn\nn\ny\n' |
+    printf '1\n\nn\nn\ny\nn\n' |
         HOME="$decline_home" PATH="$decline_bin:/usr/bin:/bin" \
         XDG_CONFIG_HOME="$decline_home/.config" DOTFILES_DISTRO_ID=arch \
         DOTFILES_TEST_LOG="$TEST_ROOT/commands.log" \
@@ -478,6 +532,34 @@ if command -v script >/dev/null 2>&1; then
 fi
 
 if command -v script >/dev/null 2>&1; then
+    service_failure_home="$TEST_ROOT/service-failure-home"
+    service_failure_bin="$TEST_ROOT/service-failure-bin"
+    make_mock_bin "$service_failure_bin"
+    make_mock_curl "$service_failure_bin"
+    make_mock_pacman "$service_failure_bin"
+    : > "$TEST_ROOT/commands.log"
+    if DOTFILES_SYSTEMCTL_FAIL_SERVICE=tailscaled.service \
+        run_interactive_installer "$service_failure_home" "$service_failure_bin" \
+        '1\n\nn\nn\ny\ny\n' >"$TEST_ROOT/service-failure.out" 2>&1; then
+        echo "failed tailscaled service command unexpectedly succeeded" >&2
+        exit 1
+    fi
+    grep -q 'Failed to enable required service tailscaled.service' "$TEST_ROOT/service-failure.out"
+    ! grep -q 'tailscale up' "$TEST_ROOT/commands.log"
+
+    unavailable_service_home="$TEST_ROOT/unavailable-service-home"
+    : > "$TEST_ROOT/commands.log"
+    if DOTFILES_MISSING_SERVICE=tailscaled.service \
+        run_interactive_installer "$unavailable_service_home" "$service_failure_bin" \
+        '1\n\nn\nn\ny\ny\n' >"$TEST_ROOT/unavailable-service.out" 2>&1; then
+        echo "missing tailscaled service unexpectedly succeeded" >&2
+        exit 1
+    fi
+    grep -q 'Tailscale is installed but tailscaled.service is unavailable' \
+        "$TEST_ROOT/unavailable-service.out"
+fi
+
+if command -v script >/dev/null 2>&1; then
     sddm_conflict_home="$TEST_ROOT/sddm-conflict-home"
     sddm_conflict_bin="$TEST_ROOT/sddm-conflict-bin"
     make_mock_bin "$sddm_conflict_bin"
@@ -490,7 +572,7 @@ if command -v script >/dev/null 2>&1; then
         "$sddm_conflict_home/etc/systemd/system/display-manager.service"
     : > "$TEST_ROOT/commands.log"
     run_interactive_installer "$sddm_conflict_home" "$sddm_conflict_bin" \
-        '1\n\nn\nn\n\ny\ny\n' >/dev/null
+        '1\n\nn\n\ny\ny\nn\n' >/dev/null
     [[ ! -e "$sddm_conflict_home/service-state/gdm.service" ]]
     [[ -e "$sddm_conflict_home/service-state/sddm.service" ]]
     [[ "$(basename "$(readlink "$sddm_conflict_home/etc/systemd/system/display-manager.service")")" == sddm.service ]]
@@ -504,7 +586,7 @@ if command -v script >/dev/null 2>&1; then
         "$sddm_decline_home/etc/systemd/system/display-manager.service"
     : > "$TEST_ROOT/commands.log"
     run_interactive_installer "$sddm_decline_home" "$sddm_conflict_bin" \
-        '1\n\nn\nn\n\nn\ny\n' >/dev/null
+        '1\n\nn\n\nn\ny\nn\n' >/dev/null
     [[ -e "$sddm_decline_home/service-state/gdm.service" ]]
     [[ ! -e "$sddm_decline_home/service-state/sddm.service" ]]
     [[ "$(basename "$(readlink "$sddm_decline_home/etc/systemd/system/display-manager.service")")" == gdm.service ]]
@@ -518,7 +600,7 @@ if command -v script >/dev/null 2>&1; then
         "$sddm_failure_home/etc/systemd/system/display-manager.service"
     : > "$TEST_ROOT/commands.log"
     if DOTFILES_SDDM_ENABLE_FAIL=1 run_interactive_installer "$sddm_failure_home" \
-        "$sddm_conflict_bin" '1\n\nn\nn\n\ny\ny\n' >"$TEST_ROOT/sddm-enable-failure.out" 2>&1; then
+        "$sddm_conflict_bin" '1\n\nn\n\ny\ny\nn\n' >"$TEST_ROOT/sddm-enable-failure.out" 2>&1; then
         echo "failed SDDM enablement unexpectedly succeeded" >&2
         exit 1
     fi
@@ -532,12 +614,12 @@ if command -v script >/dev/null 2>&1; then
     printf '%s\n' '[Theme]' 'CursorTheme=OldCursor' > "$sddm_backup_home/etc/sddm.conf.d/10-dotfiles.conf"
     : > "$TEST_ROOT/commands.log"
     run_interactive_installer "$sddm_backup_home" "$sddm_conflict_bin" \
-        '1\n\nn\nn\n\ny\n' >/dev/null
+        '1\n\nn\n\ny\nn\n' >/dev/null
     sddm_manifest="$(find "$sddm_backup_home/.local/state/dotfiles/backups" -name manifest.tsv -type f | sort | tail -1)"
     grep -q '/etc/sddm.conf.d/10-dotfiles.conf' "$sddm_manifest"
     sddm_backup_count="$(find "$sddm_backup_home/.local/state/dotfiles/backups" -name manifest.tsv -type f | wc -l)"
     run_interactive_installer "$sddm_backup_home" "$sddm_conflict_bin" \
-        '1\n\nn\nn\n\ny\n' >/dev/null
+        '1\n\nn\n\ny\nn\n' >/dev/null
     [[ "$(find "$sddm_backup_home/.local/state/dotfiles/backups" -name manifest.tsv -type f | wc -l)" == "$sddm_backup_count" ]]
     [[ "$(grep -c '^systemctl enable --force sddm.service$' "$TEST_ROOT/commands.log")" == 1 ]]
     ! grep -Eq 'systemctl (start|restart).*sddm' "$TEST_ROOT/commands.log"
@@ -570,6 +652,7 @@ esac
 EOF
     cat > "$openrc_bin/rc-service" <<'EOF'
 #!/bin/sh
+if [ "$1" = --exists ]; then exit 0; fi
 printf '%s\n' "rc-service $*" >> "$DOTFILES_TEST_LOG"
 exit 0
 EOF
@@ -583,7 +666,7 @@ EOF
     printf '%s\n' /bin/bash > "$openrc_home/etc-shells"
     printf '%s\n' /bin/bash > "$openrc_home/account-shell"
     : > "$TEST_ROOT/commands.log"
-    printf '1\n\nn\nn\n\ny\ny\n' |
+    printf '1\n\nn\n\ny\ny\nn\n' |
         HOME="$openrc_home" PATH="$openrc_bin:/usr/bin:/bin" \
         XDG_CONFIG_HOME="$openrc_home/.config" DOTFILES_DISTRO_ID=gentoo \
         DOTFILES_TEST_LOG="$TEST_ROOT/commands.log" \
@@ -604,6 +687,9 @@ EOF
     grep -q 'media-fonts/noto' "$TEST_ROOT/commands.log"
     grep -q 'x11-misc/sddm' "$TEST_ROOT/commands.log"
     grep -q 'gui-libs/display-manager-init' "$TEST_ROOT/commands.log"
+    grep -q 'net-vpn/tailscale' "$TEST_ROOT/commands.log"
+    grep -q 'net-wireless/bluez' "$TEST_ROOT/commands.log"
+    grep -q 'net-wireless/blueman' "$TEST_ROOT/commands.log"
 fi
 
 rm -f "$full_bin/awww"
@@ -780,6 +866,8 @@ grep -q 'fontconfig' "$TEST_ROOT/commands.log"
 [[ "$(grep -c '^fc-cache -f$' "$TEST_ROOT/commands.log")" == 1 ]]
 grep -q 'sddm' "$TEST_ROOT/commands.log"
 ! grep -q 'systemctl enable.*sddm' "$TEST_ROOT/commands.log"
+! grep -Eq 'systemctl (enable|start|restart).*tailscaled' "$TEST_ROOT/commands.log"
+! grep -Eq 'systemctl (enable|start|restart).*bluetooth' "$TEST_ROOT/commands.log"
 ! grep -q '^chsh ' "$TEST_ROOT/commands.log"
 
 config_only_home="$TEST_ROOT/config-only-home"
@@ -960,6 +1048,10 @@ grep -Fq '[sddm]=sddm' "$ROOT/install.sh"
 grep -Fq '[sddm]=x11-misc/sddm' "$ROOT/install.sh"
 grep -q 'media-fonts/noto' "$ROOT/install.sh"
 grep -q 'gui-libs/display-manager-init' "$ROOT/install.sh"
+grep -Fq '[tailscale]=net-vpn/tailscale' "$ROOT/install.sh"
+grep -Fq '[tailscaled]=net-vpn/tailscale' "$ROOT/install.sh"
+grep -Fq '[blueman-manager]=net-wireless/blueman' "$ROOT/install.sh"
+grep -Fq '[bluetoothctl]=net-wireless/bluez' "$ROOT/install.sh"
 
 cursor_home="$TEST_ROOT/cursor-home"
 mkdir -p "$cursor_home/.config/gtk-3.0" "$cursor_home/.config/gtk-4.0" \
@@ -1080,6 +1172,19 @@ xmllint --noout "$ROOT/config/fontconfig/conf.d/65-noto-kufi-arabic.conf"
 ! grep -q '^Font=' "$ROOT/system/sddm/10-dotfiles.conf"
 grep -Fq 'font-family: "JetBrains Mono", "Noto Kufi Arabic", sans-serif;' "$ROOT/config/waybar/style.css"
 grep -q 'persistent-workspaces.*\[1, 2, 3, 4, 5\]' "$ROOT/config/waybar/config.jsonc.template"
+grep -Fq 'tray_once("blueman-applet", "blueman-applet", "blueman-applet")' \
+    "$ROOT/config/hypr/modules/autostart.lua"
+grep -Fq 'tray_once("tailscale-systray", "tailscale systray", "tailscale")' \
+    "$ROOT/config/hypr/modules/autostart.lua"
+[[ "$(grep -Fc '"blueman-applet"' "$ROOT/config/hypr/modules/autostart.lua")" == 1 ]]
+[[ "$(grep -Fc '"tailscale systray"' "$ROOT/config/hypr/modules/autostart.lua")" == 1 ]]
+grep -Fq 'flock -E 75 -n' "$ROOT/config/hypr/modules/autostart.lua"
+grep -Fq '>/dev/null 2>&1 &' "$ROOT/config/hypr/modules/autostart.lua"
+! rg -n 'blueman-applet|tailscale systray' "$ROOT/config/hypr/profiles"
+[[ "$(rg -l 'blueman-applet' "$ROOT/config/hypr" | wc -l)" == 1 ]]
+[[ "$(rg -l 'tailscale systray' "$ROOT/config/hypr" | wc -l)" == 1 ]]
+! rg -n 'tskey-|authkey|tailnet|device[_-]?id|/var/lib/tailscale' \
+    "$ROOT/config" "$ROOT/install.sh"
 grep -Fq '<transparent,background>\ue0b0</>' "$ROOT/themes/oh-my-posh/torii-zayed.omp.json"
 [[ "$(find "$ROOT/themes/oh-my-posh" -maxdepth 1 -name '*.bk' -type f | wc -l)" == 0 ]]
 [[ ! -d "$ROOT/themes/oh-my-posh/oh-my-posh" ]]
@@ -1104,5 +1209,14 @@ grep -q '"interface": "wlp3s0"' "$zayed_home/.config/waybar/config.jsonc"
 grep -Fq '"modules-center": ["custom/media"]' "$full_home/.config/waybar/config-top.jsonc"
 grep -Fq '"on-click-right": "kitty -e cava"' "$full_home/.config/waybar/config-top.jsonc"
 cmp "$ROOT/config/waybar/style.css" "$full_home/.config/waybar/style.css"
+
+unsupported_tray_home="$TEST_ROOT/unsupported-tray-home"
+if DOTFILES_TAILSCALE_NO_SYSTRAY=1 run_installer "$unsupported_tray_home" "$full_bin" \
+    --non-interactive --profile generic --config-only >"$TEST_ROOT/unsupported-tray.out" 2>&1; then
+    echo "unsupported tailscale systray unexpectedly passed validation" >&2
+    exit 1
+fi
+grep -q "Installed Tailscale does not support 'tailscale systray'" \
+    "$TEST_ROOT/unsupported-tray.out"
 
 echo "installer safety/full-install/profile/idempotence tests: OK"

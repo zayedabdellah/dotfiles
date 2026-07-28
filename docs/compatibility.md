@@ -43,7 +43,31 @@ x11-themes/kvantum
 gui-apps/qt6ct
 net-misc/networkmanager
 app-misc/btop
+net-vpn/tailscale
+net-wireless/bluez
+net-wireless/blueman
 ```
+
+Gentoo has no `bluez-utils` atom equivalent to Arch's split package.
+`net-wireless/bluez` is the valid atom for the Bluetooth daemon and standard
+tools, while `net-wireless/blueman` supplies both `blueman-manager` and
+`blueman-applet`. `net-vpn/tailscale` supplies the Tailscale client and
+daemon. Executable names are never passed to `emerge`.
+
+On Gentoo/systemd the approved service path uses `bluetooth.service` and
+`tailscaled.service`. On OpenRC it uses the package-provided `bluetooth` and
+`tailscaled` services with `rc-update` and `rc-service`. The installer asks
+before either path and never edits Portage, BlueZ, or Tailscale configuration.
+Audit/dry-run and packages-only do not change services. The service tests are
+mocked; both init variants still require confirmation on a real Gentoo system.
+
+The official `tailscale systray` Linux tray is bundled in Tailscale 1.88 and
+later, remains attached to the graphical user session, publishes a
+StatusNotifierItem compatible with Waybar, and requires the `tailscaled`
+daemon. Current Gentoo package versions are new enough; no alternate
+executable or separate tray atom is needed. The installer validates the
+subcommand with `tailscale systray --help` but never launches it in the
+non-graphical validation phase and never runs `tailscale up`.
 
 Waybar commonly needs `network`, `wifi`, `tray`, `mpris`, `pipewire`,
 `pulseaudio`, and `upower` USE support. Hyprland versions newer than the
@@ -129,6 +153,22 @@ default. Arch official packages are installed only when explicitly enabled;
 AUR modules require an existing helper and a separate confirmation. Their
 hardware-specific choices must still be reviewed manually before enabling
 them.
+
+## Hyprland and Waybar tray integration
+
+`config/hypr/modules/autostart.lua` is the sole source of truth for
+`blueman-applet` and `tailscale systray` startup in both the generic and
+`zayed-laptop` profiles. It launches each asynchronously behind a per-user
+`flock`, so a Hyprland reload does not create another copy. Missing commands
+are skipped without failing the session, while genuine exits are recorded in
+the user state log.
+
+Waybar's existing `tray` module remains enabled in its original location.
+There are no custom Tailscale/Blueman modules. Workspaces 1–5, media and Cava,
+click actions, module order/style, generic network discovery, and the
+`zayed-laptop` `wlp3s0` behavior remain unchanged. A fresh real Hyprland
+session is required to verify that both StatusNotifier icons render and their
+menus operate.
 
 ## Cursor resolution
 

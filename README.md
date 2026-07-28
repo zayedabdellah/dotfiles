@@ -59,8 +59,8 @@ To set up these dotfiles, follow these steps:
     *   Install Fastfetch and its approved Claude logo, then start it once per
         interactive Fish session (`ff` is an alias for `/usr/bin/fastfetch`).
     *   Apply the GTK, icon, cursor, font, Qt6ct, and Kvantum user settings.
-    *   Ask once near the beginning about the Fish login shell and required
-        NetworkManager, Bluetooth, and power-profile services.
+    *   Ask about the Fish login shell, then detect the init system and request
+        service approval after required packages and executables are validated.
     *   Install Noto Kufi Arabic, deploy an Arabic-only Fontconfig preference,
         refresh the user font cache when needed, and verify Arabic resolution.
     *   Install SDDM and offer to enable it for the next boot without starting
@@ -103,8 +103,15 @@ explicit targeted runs. Normal no-argument installation automatically applies
 the approved desktop settings; `--apply-desktop-settings` remains available
 for targeted reruns.
 
-The initial flow also asks whether required system services and SDDM should be
-enabled when needed. SDDM defaults to Yes for a normal supported Arch install.
+After package validation, the flow detects the init system and asks whether
+required system services should be enabled and started. The approval
+explicitly covers the Bluetooth and Tailscale daemons. On Arch/systemd the
+approved actions are equivalent to `systemctl enable --now bluetooth.service` and
+`systemctl enable --now tailscaled.service`; supported Gentoo installations
+use the matching systemd units or OpenRC services. Audit and dry-run never
+change services, packages-only leaves services unchanged, and declining the
+approval performs no enable/start action. SDDM defaults to Yes for a normal
+supported Arch install.
 The installer validates the Hyprland Wayland session first and never starts or
 restarts SDDM in the active session. If GDM, LightDM, greetd, Ly, LXDM, or
 another selected display manager is found, replacement requires separate
@@ -125,6 +132,48 @@ no automatic package installation. NixOS requires a future native
 NixOS/Home Manager module; this shell installer does not manage NixOS
 packages declaratively.
 
+### Tailscale and Bluetooth
+
+The normal `./install.sh` path installs Tailscale, BlueZ, the BlueZ command-line
+utilities, and Blueman. It validates `tailscale`, `tailscaled`,
+`bluetoothctl`, `blueman-manager`, and `blueman-applet` after the package
+transaction. It also checks `tailscale systray --help` without trying to start
+a graphical application from the installer.
+
+Tailscale's daemon must be enabled before the tray can communicate with the
+client. The installer asks before enabling or starting it and verifies whether
+it is active; if an approved start fails after enablement, the installer
+reports that the daemon is enabled for the next boot. The installer never runs
+`tailscale up`, logs the user in, stores an authentication key, joins a
+tailnet, changes DNS, advertises routes, selects an exit node, or changes
+existing Tailscale preferences. Authenticate later with:
+
+```bash
+tailscale up
+```
+
+You can instead use the Tailscale tray interface after `tailscaled` is active.
+The official Linux client has included the beta `tailscale systray` command
+since version 1.88; current Arch and Gentoo packages satisfy that requirement,
+so no separate tray package is installed.
+
+The same approved-service flow safely enables Bluetooth without unblocking,
+pairing, trusting, connecting, removing devices, or overwriting BlueZ
+configuration. Launch the full manager manually with:
+
+```bash
+blueman-manager
+```
+
+Hyprland's canonical `modules/autostart.lua` starts `blueman-applet` and
+`tailscale systray` asynchronously. Per-user process locks prevent duplicate
+applets across Hyprland reloads, and genuine startup failures are recorded in
+`${XDG_STATE_HOME:-~/.local/state}/dotfiles/autostart.log`. Both applications
+publish StatusNotifier icons through Waybar's existing `tray` module; no custom
+Waybar modules or layout changes are needed. A logout, reboot, or fresh
+Hyprland session may be required, and final icon/menu behavior must still be
+tested in a real graphical session.
+
 3.  **Restart Hyprland:**
 
     After the script completes, restart your Hyprland session to apply the new configurations.
@@ -138,6 +187,10 @@ The Hyprland configuration is located in `~/.config/hypr/`. It uses a modular Lu
 ### Waybar
 
 The Waybar configuration is located in `~/.config/waybar/`. It includes `config.jsonc` for the main bar layout and `style.css` for styling. Custom scripts used by Waybar are found in `scripts/`.
+Its existing system tray remains enabled in the original module order and is
+where the Blueman and Tailscale StatusNotifier icons appear. Workspaces 1–5,
+media/Cava behavior, click actions, generic interface selection, and the
+`zayed-laptop` `wlp3s0` override remain unchanged.
 
 ### Themes
 
@@ -252,6 +305,9 @@ The following applications are used in these configurations:
 *   **Noto Kufi Arabic**: Arabic-script fallback from the official Noto package.
 *   **SDDM**: Default supported login manager, enabled only with approval for the next boot.
 *   **Papirus-Dark**: Required icon theme for GTK, Qt, xsettingsd, and Rofi fallback.
+*   **Tailscale**: Required mesh VPN client and daemon; authentication remains manual.
+*   **BlueZ / BlueZ utilities**: Required Bluetooth daemon and command-line support.
+*   **Blueman**: Required Bluetooth manager and Hyprland tray applet.
 
 Rofi preserves Oranchelo as the preferred icon theme without bundling it. The
 Rofi launcher detects Oranchelo and falls back to the required Papirus-Dark
@@ -290,9 +346,12 @@ git --no-pager log -1 --oneline
 ```
 
 Choose `1) Generic`. Do not run the installer as root. After a successful run,
-log out and back in or reboot. Real package and graphical-session integration
-must be confirmed in the VM; the repository test suite uses mocked package,
-account, service, and desktop-setting commands with temporary homes.
+log out and back in or reboot. Confirm both tray icons in Waybar, open
+`blueman-manager`, and inspect Tailscale's tray only after `tailscaled` is
+active. Real package, service, and graphical-session integration must be
+confirmed in the VM; the repository test suite uses mocked package, account,
+service, and desktop-setting commands with temporary homes and does not claim
+a real Hyprland tray test.
 
 ## Contributing
 
