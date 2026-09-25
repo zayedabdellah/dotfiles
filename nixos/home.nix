@@ -4,6 +4,7 @@ let
   configTree = pkgs.runCommand "dotfiles-home-config" { } ''
     mkdir -p "$out"
     cp -r ${repo}/config/. "$out/"
+    chmod u+w "$out/Kvantum"
     mkdir -p "$out/Kvantum/gruvbox-kvantum"
     cp -r ${repo}/themes/kvantum/gruvbox-kvantum/. "$out/Kvantum/gruvbox-kvantum/"
   '';
