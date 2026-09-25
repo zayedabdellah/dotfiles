@@ -41,6 +41,7 @@ in {
 
   services.xserver.enable = true;
   services.xserver.videoDrivers = [ "nvidia" ];
+  hardware.nvidia.open = false;
   hardware.nvidia.modesetting.enable = true;
   services.displayManager.sddm.enable = true;
   services.displayManager.sddm.wayland.enable = true;
