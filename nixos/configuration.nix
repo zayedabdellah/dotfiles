@@ -103,7 +103,6 @@ in {
     hyprpolkitagent
     jq
     kitty
-    kvantum
     libnotify
     mangohud
     mpv
