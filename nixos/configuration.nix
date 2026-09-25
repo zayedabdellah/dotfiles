@@ -145,7 +145,7 @@ in {
     xwayland
   ];
 
-  fonts.packages = with pkgs; [ nerd-fonts.jetbrains-mono noto-fonts noto-fonts-color-emoji ];
+  fonts.packages = with pkgs; [ nerd-fonts.jetbrains-mono nerd-fonts.symbols-only noto-fonts noto-fonts-color-emoji ];
   services.dbus.enable = true;
   programs.dconf.enable = true;
 

@@ -21,7 +21,7 @@
 /* Global window baseline—completely transparent to remove all black strips */
 window#waybar {
   background: transparent;
-  font-family: "JetBrainsMono Nerd Font Mono", "JetBrainsMono Nerd Font", "JetBrains Mono", "Noto Kufi Arabic", sans-serif;
+  font-family: "JetBrains Mono", "Noto Kufi Arabic", sans-serif;
   font-size: 11pt;
 }
 
@@ -180,14 +180,15 @@ window#waybar.media-bar {
     font-weight: bold;
 }
 
-/* Use the patched mono font for consistent Nerd Font glyphs and sizing. */
+/* Keep Waybar text unchanged and use the dedicated Nerd Font Symbols fallback for icons. */
 #cpu,
 #memory,
 #wireplumber,
 #backlight,
 #network,
 #battery,
-#power-profiles-daemon {
-  font-family: "JetBrainsMono Nerd Font Mono", "JetBrainsMono Nerd Font", sans-serif;
-  font-size: 9pt;
+#power-profiles-daemon,
+#custom-media {
+  font-family: "Symbols Nerd Font Mono", "Symbols Nerd Font", "JetBrainsMono Nerd Font Mono", "JetBrains Mono", sans-serif;
+  font-size: 11pt;
 }
