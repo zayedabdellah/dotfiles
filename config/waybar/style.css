@@ -21,7 +21,7 @@
 /* Global window baseline—completely transparent to remove all black strips */
 window#waybar {
   background: transparent;
-  font-family: "JetBrains Mono", "Noto Kufi Arabic", sans-serif;
+  font-family: "JetBrainsMono Nerd Font Mono", "JetBrainsMono Nerd Font", "JetBrains Mono", "Noto Kufi Arabic", sans-serif;
   font-size: 11pt;
 }
 
@@ -178,4 +178,17 @@ window#waybar.media-bar {
     background-color: #83a598;
     color: #282828;
     font-weight: bold;
+}
+
+/* Use the patched mono font for consistent Nerd Font glyphs and sizing. */
+#cpu,
+#memory,
+#wireplumber,
+#backlight,
+#network,
+#battery,
+#power-profiles-daemon {
+  font-family: "JetBrainsMono Nerd Font Mono", "JetBrainsMono Nerd Font", sans-serif;
+  font-size: 9pt;
+  text-align: center;
 }
