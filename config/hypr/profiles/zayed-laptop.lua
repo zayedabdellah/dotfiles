@@ -62,7 +62,7 @@ return {
         media_daemon = home .. "/.config/waybar/scripts/media-daemon.sh",
         pipewire_launcher = "if command -v gentoo-pipewire-launcher >/dev/null 2>&1; then gentoo-pipewire-launcher; elif command -v systemctl >/dev/null 2>&1; then systemctl --user start pipewire pipewire-pulse wireplumber; fi",
         wallpaper = home .. "/.config/hypr/scripts/wallpaper.sh",
-        polkit_agent = "if command -v hyprpolkitagent >/dev/null 2>&1; then hyprpolkitagent; elif test -x /usr/lib/hyprpolkitagent/hyprpolkitagent; then /usr/lib/hyprpolkitagent/hyprpolkitagent; elif test -x /usr/libexec/hyprpolkitagent; then /usr/libexec/hyprpolkitagent; fi",
-        polkit_probe = "command -v hyprpolkitagent || test -x /usr/lib/hyprpolkitagent/hyprpolkitagent || test -x /usr/libexec/hyprpolkitagent",
+        polkit_agent = "if command -v hyprpolkitagent >/dev/null 2>&1; then hyprpolkitagent; elif test -x /run/current-system/sw/libexec/hyprpolkitagent; then /run/current-system/sw/libexec/hyprpolkitagent; elif test -x /usr/lib/hyprpolkitagent/hyprpolkitagent; then /usr/lib/hyprpolkitagent/hyprpolkitagent; elif test -x /usr/libexec/hyprpolkitagent; then /usr/libexec/hyprpolkitagent; fi",
+        polkit_probe = "command -v hyprpolkitagent || test -x /run/current-system/sw/libexec/hyprpolkitagent || test -x /usr/lib/hyprpolkitagent/hyprpolkitagent || test -x /usr/libexec/hyprpolkitagent",
     },
 }
