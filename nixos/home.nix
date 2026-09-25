@@ -1,6 +1,12 @@
-{ ... }:
+{ pkgs, ... }:
 let
   repo = ../.;
+  configTree = pkgs.runCommand "dotfiles-home-config" { } ''
+    mkdir -p "$out"
+    cp -r ${repo}/config/. "$out/"
+    mkdir -p "$out/Kvantum/gruvbox-kvantum"
+    cp -r ${repo}/themes/kvantum/gruvbox-kvantum/. "$out/Kvantum/gruvbox-kvantum/"
+  '';
 in {
   home.username = "zayed";
   home.homeDirectory = "/home/zayed";
@@ -10,7 +16,7 @@ in {
 
   home.file = {
     ".config" = {
-      source = "${repo}/config";
+      source = configTree;
       recursive = true;
     };
     ".themes/gruvbox-dark-gtk".source = "${repo}/themes/gruvbox-dark-gtk";
@@ -23,7 +29,6 @@ in {
   home.sessionVariables = {
     XCURSOR_THEME = "Bibata-Modern-Amber";
     XCURSOR_SIZE = "24";
-    QT_QPA_PLATFORMTHEME = "qt6ct";
   };
 
   xdg.enable = true;

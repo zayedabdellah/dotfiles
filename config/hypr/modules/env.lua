@@ -38,7 +38,11 @@ set_env("XDG_SESSION_DESKTOP")
 -- QT Specific Tuning (Keeps Native Qt Apps Unscaled) --
 set_env("QT_AUTO_SCREEN_SCALE_FACTOR")
 set_env("QT_ENABLE_HIGHDPI_SCALING")
-set_env("QT_QPA_PLATFORMTHEME")
+hl.env("QT_QPA_PLATFORMTHEME", os.getenv("DOTFILES_QT_PLATFORMTHEME") or machine.env.QT_QPA_PLATFORMTHEME)
+local qtStyleOverride = os.getenv("DOTFILES_QT_STYLE_OVERRIDE")
+if qtStyleOverride ~= nil and qtStyleOverride ~= "" then
+    hl.env("QT_STYLE_OVERRIDE", qtStyleOverride)
+end
 -- hl.env("QT_STYLE_OVERRIDE", "kvantum")
 set_env("QT_WAYLAND_DISABLE_WINDOWDECORATION")
 set_env("QT_NO_XDG_DESKTOP_PORTAL")

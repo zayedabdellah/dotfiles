@@ -3,11 +3,19 @@ let
   braveBrowser = pkgs.writeShellScriptBin "brave-browser" ''
     exec ${pkgs.brave}/bin/brave "$@"
   '';
+  braveBrowserStable = pkgs.writeShellScriptBin "brave-browser-stable" ''
+    exec ${pkgs.brave}/bin/brave "$@"
+  '';
 in {
   imports = [ ./hardware-configuration.nix ];
 
   networking.hostName = "nixos";
   networking.networkmanager.enable = true;
+  environment.sessionVariables = {
+    DOTFILES_MACHINE_PROFILE = "zayed-laptop";
+    DOTFILES_QT_PLATFORMTHEME = "qt5ct";
+    DOTFILES_QT_STYLE_OVERRIDE = "kvantum";
+  };
   time.timeZone = "Asia/Dubai";
   i18n.defaultLocale = "en_US.UTF-8";
   console.keyMap = "us";
@@ -32,6 +40,8 @@ in {
   nixpkgs.config.allowUnfree = true;
 
   services.xserver.enable = true;
+  services.xserver.videoDrivers = [ "nvidia" ];
+  hardware.nvidia.modesetting.enable = true;
   services.displayManager.sddm.enable = true;
   services.displayManager.sddm.wayland.enable = true;
   programs.hyprland = {
@@ -40,7 +50,16 @@ in {
   };
   xdg.portal = {
     enable = true;
-    extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
+    extraPortals = [
+      pkgs.xdg-desktop-portal-gtk
+      pkgs.xdg-desktop-portal-hyprland
+    ];
+  };
+
+  qt = {
+    enable = true;
+    platformTheme = "qt5ct";
+    style = "kvantum";
   };
 
   services.pipewire = {
@@ -57,9 +76,11 @@ in {
   environment.systemPackages = with pkgs; [
     bash
     awww
+    bc
     btop
     brave
     braveBrowser
+    braveBrowserStable
     brightnessctl
     bluez
     blueman
@@ -67,6 +88,8 @@ in {
     fastfetch
     fontconfig
     coreutils
+    gnugrep
+    gnused
     curl
     findutils
     gawk
@@ -91,7 +114,7 @@ in {
     oh-my-posh
     papirus-icon-theme
     playerctl
-    pavucontrol
+    lxqt.pavucontrol-qt
     polkit
     procps
     power-profiles-daemon

@@ -2,7 +2,9 @@
 
 These steps install the repository's `nixos-unstable` flake to `/dev/sda` on a
 UEFI x86_64 computer. Packages are declared system-wide; Home Manager applies
-the rice configuration to the `zayed` account.
+the rice configuration to the `zayed` account. The `zayed-laptop` profile is
+selected automatically, including its NVIDIA setup and current eDP-1 monitor
+profile.
 
 > **Warning:** The partitioning and formatting commands below erase the entire
 > `/dev/sda` disk. Confirm it is the intended disk before continuing. Do not

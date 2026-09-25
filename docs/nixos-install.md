@@ -2,8 +2,9 @@
 
 This repository provides a UEFI/x86_64 NixOS configuration with Hyprland and
 Home Manager. The Home Manager profile reuses the existing rice files; it does
-not run the imperative `install.sh` installer. The configuration assumes the
-username `zayed`, a UEFI system, and a network connection during installation.
+not run the imperative `install.sh` installer. It selects the existing
+`zayed-laptop` profile and assumes the username `zayed`, an NVIDIA-capable
+x86_64 UEFI system, and a network connection during installation.
 
 ## 1. Boot and partition
 
@@ -68,8 +69,9 @@ nixos-install --flake /mnt/etc/nixos#dotfiles --root /mnt
 The dry run reports which store paths Nix can fetch and which derivations it
 would build locally. If a package derivation that you do not want compiled
 appears under “will be built,” stop here; the official cache does not have a
-substitute for it. A small system-configuration derivation may still be built
-locally even when all package binaries are fetched.
+substitute for it. Small system-configuration and Home Manager asset-assembly
+derivations may still be built locally even when all package binaries are
+fetched.
 
 Set the root password when prompted. Before rebooting, set the desktop user's
 password in the installed system:
@@ -81,7 +83,11 @@ nixos-enter --root /mnt -c 'passwd zayed'
 Then reboot, select the Hyprland session in SDDM, and sign in as `zayed`. The
 desktop packages are declared in NixOS `environment.systemPackages`, so
 they are available system-wide to users. Home Manager links the repository's
-active configuration, theme, font, and cursor assets into `zayed`'s home.
+active configuration, Torii wallpaper, Gruvbox GTK and Kvantum themes,
+Kitty/Qt/GTK settings, JetBrains Mono fonts, and Bibata cursor into `zayed`'s
+home. NixOS enables Qt 5/6 platform and Kvantum styling and the Hyprland
+Wayland portal. It provides the Brave command aliases needed by the laptop
+profile and the native Qt Pavucontrol application used by Waybar.
 
 ## 3. Rebuild after installation
 
@@ -95,19 +101,21 @@ sudo nixos-rebuild switch --flake .#dotfiles
 ```
 
 For a rollback, choose an earlier generation from the boot menu. The
-`zayed-laptop` Hyprland profile is never selected automatically; use the generic
-profile on new hardware, and opt into the laptop profile only on the matching
-machine.
+`zayed-laptop` Hyprland profile is selected automatically. Its monitor rule
+matches the repository owner's built-in eDP-1 panel at 2560x1600/165 Hz, scale
+2; edit `config/hypr/profiles/zayed-laptop.lua` in `/etc/nixos` if your display
+differs, then add the changed file to Git and rebuild. NVIDIA support is
+enabled because this profile declares NVIDIA GPU settings.
 
 ## Scope and hardware notes
 
 The configuration currently targets `x86_64-linux`, UEFI boot, NetworkManager,
-SDDM, PipeWire, Bluetooth, Power Profiles Daemon, and Tailscale. The native
+SDDM, Hyprland, NVIDIA graphics, PipeWire, Bluetooth, Power Profiles Daemon,
+and Tailscale. The native
 NixOS path declares those services and packages; it never authenticates a
 Tailscale account. It does not partition disks, enable Secure Boot, configure
-disk encryption, select a GPU driver, or assume a particular swap layout.
-Those choices belong in the generated hardware module and should be reviewed
-for the target computer before installation.
+disk encryption, or assume a particular swap layout. The generated hardware
+module supplies the target's filesystems and hardware-specific settings.
 
 The flake follows the `nixos-unstable` and Home Manager `master` branches.
 The first `nix flake lock` pins their exact input revisions in `flake.lock`;

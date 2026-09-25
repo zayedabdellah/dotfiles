@@ -25,11 +25,17 @@ config/hypr/profiles/zayed-laptop.lua
 ```
 
 `config/hypr/profiles/generic.lua` is the safe fallback. The laptop profile is
-never selected implicitly: choose it explicitly with
+selected explicitly by the NixOS flake for this repository. The imperative
+`install.sh` installer does not select it implicitly: choose it there with
 `DOTFILES_MACHINE_PROFILE=zayed-laptop` or an ignored
 `config/hypr/machine.local.lua` based on
 `config/hypr/machine.local.lua.example`. Invalid profile names stop with a
 clear error.
+
+The NixOS configuration enables the existing NVIDIA profile and applies the
+same laptop profile. See `docs/nixos-install.md` for the fresh-install path;
+that configuration also assembles the Kvantum theme into Home Manager's
+managed `~/.config` tree and enables NixOS's Qt 5/6 theme plugins.
 
 Waybar receives the selected profile's `DOTFILES_NETWORK_INTERFACE`. The
 laptop retains `wlp3s0`; generic systems use the active route interface or
