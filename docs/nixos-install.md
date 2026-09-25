@@ -78,9 +78,10 @@ password in the installed system:
 nixos-enter --root /mnt -c 'passwd zayed'
 ```
 
-Then reboot, select the Hyprland session in SDDM, and sign in as `zayed`. Git
-is installed system-wide; Home Manager links the repository's active
-configuration, theme, font, and cursor assets into the user's home.
+Then reboot, select the Hyprland session in SDDM, and sign in as `zayed`. The
+desktop packages are declared in NixOS `environment.systemPackages`, so
+they are available system-wide to users. Home Manager links the repository's
+active configuration, theme, font, and cursor assets into `zayed`'s home.
 
 ## 3. Rebuild after installation
 

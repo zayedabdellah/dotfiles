@@ -1,5 +1,9 @@
 { lib, pkgs, ... }:
-{
+let
+  braveBrowser = pkgs.writeShellScriptBin "brave-browser" ''
+    exec ${pkgs.brave}/bin/brave "$@"
+  '';
+in {
   imports = [ ./hardware-configuration.nix ];
 
   networking.hostName = "nixos";
@@ -52,10 +56,16 @@
 
   environment.systemPackages = with pkgs; [
     bash
+    awww
+    btop
+    brave
+    braveBrowser
     brightnessctl
     bluez
     blueman
+    cava
     fastfetch
+    fontconfig
     coreutils
     curl
     findutils
@@ -69,13 +79,19 @@
     hyprpolkitagent
     jq
     kitty
+    kvantum
     libnotify
+    mangohud
+    mpv
     networkmanagerapplet
+    networkmanager
     noto-fonts
     noto-fonts-color-emoji
     nwg-look
+    oh-my-posh
     papirus-icon-theme
     playerctl
+    pavucontrol
     polkit
     procps
     power-profiles-daemon
@@ -100,7 +116,7 @@
     xwayland
   ];
 
-  fonts.packages = with pkgs; [ noto-fonts noto-fonts-color-emoji ];
+  fonts.packages = with pkgs; [ nerd-fonts.jetbrains-mono noto-fonts noto-fonts-color-emoji ];
   services.dbus.enable = true;
   programs.dconf.enable = true;
 
