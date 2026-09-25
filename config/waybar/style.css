@@ -22,7 +22,7 @@
 window#waybar {
   background: transparent;
   font-family: "JetBrains Mono", "Noto Kufi Arabic", sans-serif;
-  font-size: 12pt;
+  font-size: 14pt;
 }
 
 /* Apply the dark background ONLY to the bottom bar */
@@ -190,5 +190,5 @@ window#waybar.media-bar {
 #power-profiles-daemon,
 #custom-media {
   font-family: "JetBrains Mono", "Symbols Nerd Font", "Symbols Nerd Font Mono", "Noto Kufi Arabic", sans-serif;
-  font-size: 12pt;
+  font-size: 14pt;
 }

@@ -2,7 +2,7 @@
   "name": "media-bar",
   "layer": "top",
   "position": "top",
-  "height": 34,
+  "height": 40,
   "exclusive": true, // Tells the WM to push windows down
   "modules-center": ["custom/media"],
   "custom/media": {

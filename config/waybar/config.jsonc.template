@@ -2,7 +2,7 @@
   "name": "bottom-bar",
   "layer": "top",
   "position": "bottom",
-  "height": 34,
+  "height": 40,
   "spacing": 4,
   "modules-left": ["hyprland/workspaces", "hyprland/window", "power-profiles-daemon", "tray"],
   "modules-center": ["clock"],
