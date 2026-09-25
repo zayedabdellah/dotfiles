@@ -118,7 +118,7 @@ in {
     polkit
     procps
     power-profiles-daemon
-    qt6ct
+    qt6Packages.qt6ct
     qt6Packages.qtwayland
     rofi
     slurp
