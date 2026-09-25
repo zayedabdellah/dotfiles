@@ -57,7 +57,7 @@ To set up these dotfiles, follow these steps:
     *   Copy the approved configuration, theme, cursor, font, wallpaper, and
         script assets to their corresponding XDG locations.
     *   Install Fastfetch and its approved Claude logo, then start it once per
-        interactive Fish session (`ff` is an alias for `/usr/bin/fastfetch`).
+        interactive Fish session (`ff` runs `fastfetch` from `PATH`).
     *   Apply the GTK, icon, cursor, font, Qt6ct, and Kvantum user settings.
     *   Ask about the Fish login shell, then detect the init system and request
         service approval after required packages and executables are validated.
@@ -125,12 +125,12 @@ replacement in `manifest.tsv`. Unchanged files are left untouched, and
 unrelated files are preserved. A complete restore/uninstall orchestrator is
 still future work.
 
-Gentoo and Arch are the supported package-management targets. Gentoo uses
-verified Portage atoms only and prints USE-flag/overlay guidance without
-changing Portage configuration. Fedora support is experimental and performs
-no automatic package installation. NixOS requires a future native
-NixOS/Home Manager module; this shell installer does not manage NixOS
-packages declaratively.
+Arch and Gentoo are the supported targets for this imperative installer.
+Gentoo uses verified Portage atoms only and prints USE-flag/overlay guidance
+without changing Portage configuration. Fedora support is experimental and
+performs no automatic package installation. NixOS uses the native flake and Home
+Manager configuration in `nixos/`; do not run this imperative installer there.
+Follow [the fresh NixOS installation guide](docs/nixos-install.md).
 
 ### Tailscale and Bluetooth
 

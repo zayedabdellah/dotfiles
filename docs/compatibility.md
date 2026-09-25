@@ -78,9 +78,11 @@ Fedora/Nobara support is experimental and incomplete. This installer does not
 run `dnf` or `dnf5` automatically; the full Arch package path is not claimed
 for Fedora and external repository coverage is not verified.
 
-NixOS support is experimental and incomplete. Use a future Nix flake and
-Home Manager/NixOS module for Fish, Oh My Posh, packages, and configuration;
-this shell installer does not replace declarative system configuration.
+NixOS uses the repository's native flake and Home Manager configuration.
+Follow `docs/nixos-install.md` for a fresh UEFI installation. The imperative
+installer refuses to manage NixOS packages; use `nixos-rebuild` for subsequent
+system and Home Manager changes. The current flake targets x86_64 UEFI and
+expects a generated, reviewed `nixos/hardware-configuration.nix`.
 
 ## Kvantum local dependency
 

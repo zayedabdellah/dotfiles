@@ -389,7 +389,7 @@ grep -Fxq 'Gtk/CursorThemeSize 24' "$full_home/.config/xsettingsd/xsettingsd.con
 [[ -f "$full_home/.themes/torii-zayed.omp.json" ]]
 [[ ! -e "$full_home/.themes/gruvbox-kvantum" ]]
 grep -Fxq 'style=kvantum' "$full_home/.config/qt6ct/qt6ct.conf"
-grep -Fxq 'alias ff="/usr/bin/fastfetch"' "$full_home/.config/fish/config.fish"
+grep -Fxq 'alias ff="fastfetch"' "$full_home/.config/fish/config.fish"
 [[ "$(grep -Fc fastfetch "$full_home/.config/fish/config.fish")" == 2 ]]
 grep -q 'persistent-workspaces.*\[1, 2, 3, 4, 5\]' "$full_home/.config/waybar/config.jsonc"
 ! grep -q '"interface": "wlp3s0"' "$full_home/.config/waybar/config.jsonc"

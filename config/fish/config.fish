@@ -20,6 +20,6 @@ fish_add_path ~/go/bin
 fish_add_path ~/.local/bin
 fish_add_path ~/.cargo/bin
 alias dolphin-emu="env QT_SCALE_FACTOR=2 dolphin-emu"
-alias ff="/usr/bin/fastfetch"
+alias ff="fastfetch"
 
 oh-my-posh init fish --config ~/.themes/torii-zayed.omp.json | source

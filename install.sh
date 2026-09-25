@@ -1797,7 +1797,7 @@ validate_deployment() {
     fi
     grep -Fxq 'oh-my-posh init fish --config ~/.themes/torii-zayed.omp.json | source' "$HOME/.config/fish/config.fish" || { echo "[INVALID] Fish Oh My Posh path" >&2; failed=1; }
     [[ "$(grep -Fc 'fastfetch' "$HOME/.config/fish/config.fish")" == 2 ]] || { echo "[INVALID] Fastfetch must start once and have one alias" >&2; failed=1; }
-    grep -Fxq 'alias ff="/usr/bin/fastfetch"' "$HOME/.config/fish/config.fish" || { echo "[INVALID] Fastfetch ff alias" >&2; failed=1; }
+    grep -Fxq 'alias ff="fastfetch"' "$HOME/.config/fish/config.fish" || { echo "[INVALID] Fastfetch ff alias" >&2; failed=1; }
     grep -Fq '<transparent,background>\ue0b0</>' "$HOME/.themes/torii-zayed.omp.json" || { echo "[REGRESSION] dynamic Git separator missing" >&2; failed=1; }
     if grep -Rql 'awww-daemon' "$HOME/.config/hypr/modules" "$HOME/.config/hypr/profiles" 2>/dev/null; then
         echo "[REGRESSION] competing awww-daemon startup remains" >&2
