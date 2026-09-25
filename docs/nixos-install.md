@@ -61,8 +61,15 @@ updates deliberately.
 ```sh
 nix --extra-experimental-features 'nix-command flakes' flake lock
 nix-shell -p git --run 'git -C /mnt/etc/nixos add flake.lock'
+nix --extra-experimental-features 'nix-command flakes' build --dry-run --no-link .#nixosConfigurations.dotfiles.config.system.build.toplevel
 nixos-install --flake /mnt/etc/nixos#dotfiles --root /mnt
 ```
+
+The dry run reports which store paths Nix can fetch and which derivations it
+would build locally. If a package derivation that you do not want compiled
+appears under “will be built,” stop here; the official cache does not have a
+substitute for it. A small system-configuration derivation may still be built
+locally even when all package binaries are fetched.
 
 Set the root password when prompted. Before rebooting, set the desktop user's
 password in the installed system:
@@ -101,5 +108,11 @@ disk encryption, select a GPU driver, or assume a particular swap layout.
 Those choices belong in the generated hardware module and should be reviewed
 for the target computer before installation.
 
-The NixOS profile uses `nixos-26.05` and the matching Home Manager release.
-The first `nix flake lock` pins the exact input revisions in `flake.lock`.
+The flake follows the `nixos-unstable` and Home Manager `master` branches.
+The first `nix flake lock` pins their exact input revisions in `flake.lock`;
+future `nix flake update` commands can move those pins to newer unstable
+revisions. The system prefers the official NixOS binary cache and disables
+fallback builds when a known substitute cannot be fetched. This does not
+guarantee every package has a binary: Nix may still build from source when no
+substitute exists for an output. Check the dry-run build plan before installing
+if you want to avoid source builds entirely.

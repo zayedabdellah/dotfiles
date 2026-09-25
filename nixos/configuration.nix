@@ -20,7 +20,11 @@
   programs.fish.enable = true;
   security.sudo.wheelNeedsPassword = true;
 
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  nix.settings = {
+    experimental-features = [ "nix-command" "flakes" ];
+    substituters = [ "https://cache.nixos.org/" ];
+    fallback = false;
+  };
   nixpkgs.config.allowUnfree = true;
 
   services.xserver.enable = true;
