@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 CONFIG_TOP="$HOME/.config/waybar/config-top.jsonc"
 
