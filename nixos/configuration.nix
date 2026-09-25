@@ -20,7 +20,13 @@ in {
   i18n.defaultLocale = "en_US.UTF-8";
   console.keyMap = "us";
 
-  boot.loader.systemd-boot.enable = lib.mkDefault true;
+  boot.loader.systemd-boot.enable = false;
+  boot.loader.grub = {
+    enable = true;
+    efiSupport = true;
+    device = "nodev";
+    useOSProber = true;
+  };
   boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
 
   users.users.zayed = {
