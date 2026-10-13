@@ -223,6 +223,21 @@ EOF
     chmod +x "$bin/curl"
 }
 
+make_mock_portageq() {
+    local bin="$1"
+    cat > "$bin/portageq" <<'EOF'
+#!/bin/sh
+[ "$1" = has_version ] && [ "$2" = / ] || exit 2
+atom="$3"
+printf '%s\n' "portageq has_version / $atom" >> "$DOTFILES_TEST_LOG"
+case " ${DOTFILES_GENTOO_INSTALLED_ATOMS:-} " in
+    *" $atom "*) exit 0 ;;
+    *) exit 1 ;;
+esac
+EOF
+    chmod +x "$bin/portageq"
+}
+
 link_system_commands_without_oh_my_posh() {
     local bin="$1" candidate command_name
     for candidate in /usr/bin/*; do
@@ -670,6 +685,7 @@ if command -v script >/dev/null 2>&1; then
     openrc_bin="$TEST_ROOT/sddm-openrc-bin"
     make_mock_bin "$openrc_bin"
     make_mock_curl "$openrc_bin"
+    make_mock_portageq "$openrc_bin"
     cat > "$openrc_bin/emerge" <<'EOF'
 #!/bin/sh
 printf '%s\n' "emerge $*" >> "$DOTFILES_TEST_LOG"
@@ -729,6 +745,7 @@ EOF
         DOTFILES_SDDM_CONFIG_DIR="$openrc_home/etc/sddm.conf.d" \
         DOTFILES_SYSTEM_ICON_DIR="$openrc_home/usr/share/icons" \
         DOTFILES_OPENRC_DISPLAY_MANAGER_CONFIG="$openrc_home/etc/conf.d/display-manager" \
+        DOTFILES_GENTOO_INSTALLED_ATOMS='media-fonts/noto gui-apps/waybar' \
         script -qec "bash '$ROOT/install.sh'" /dev/null >/dev/null
     grep -Fxq 'DISPLAYMANAGER="sddm"' "$openrc_home/etc/conf.d/display-manager"
     grep -Fxq 'CHECKVT=7' "$openrc_home/etc/conf.d/display-manager"
@@ -745,8 +762,11 @@ EOF
     grep -q '^eselect repository enable hyproverlay$' "$TEST_ROOT/commands.log"
     grep -q '^emerge --sync hyproverlay$' "$TEST_ROOT/commands.log"
     grep -q 'gui-wm/hyprland::hyproverlay' "$TEST_ROOT/commands.log"
-    grep -q 'gui-apps/waybar::hyproverlay' "$TEST_ROOT/commands.log"
+    grep -q 'portageq has_version / gui-apps/waybar$' "$TEST_ROOT/commands.log"
+    ! grep -Eq '^emerge .*media-fonts/noto([[:space:]]|$)' "$TEST_ROOT/commands.log"
+    ! grep -Fq 'emerge --oneshot --verbose --autounmask=y --autounmask-write --autounmask-continue gui-apps/waybar::hyproverlay' "$TEST_ROOT/commands.log"
     grep -q 'gui-apps/hyprlock::hyproverlay' "$TEST_ROOT/commands.log"
+    grep -Eq '^emerge .*gui-apps/hyprlock::hyproverlay([[:space:]]|$)' "$TEST_ROOT/commands.log"
     grep -q 'gui-apps/hypridle::hyproverlay' "$TEST_ROOT/commands.log"
     grep -q 'gui-apps/hyprshutdown::hyproverlay' "$TEST_ROOT/commands.log"
     grep -q -- '--autounmask=y --autounmask-write --autounmask-continue' "$TEST_ROOT/commands.log"
@@ -755,6 +775,7 @@ EOF
     manual_bin="$TEST_ROOT/gentoo-manual-bin"
     make_mock_bin "$manual_bin"
     make_mock_curl "$manual_bin"
+    make_mock_portageq "$manual_bin"
     for manual_command in swaync awww awww-daemon hyprpolkitagent; do
         rm -f "$manual_bin/$manual_command"
     done

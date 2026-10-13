@@ -21,6 +21,9 @@ verified Gentoo atoms. The package transaction accepts Portage autounmask
 changes for its selected packages. It does not automatically change global USE
 flags, keywords, masks, or licenses. Portage-generated configuration updates
 may still need review/merging according to the host's Portage configuration.
+Before installing, the script checks the Portage installed-package database and
+passes only atoms that are not already installed to `emerge`, avoiding
+unnecessary reinstall/rebuild prompts.
 `awww`, SwayNC, and `hyprpolkitagent` are not provided by Hyproverlay and must
 be installed manually; missing required commands stop deployment before files
 are copied.

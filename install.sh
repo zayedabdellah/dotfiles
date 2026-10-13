@@ -836,9 +836,27 @@ install_gentoo_emerge() {
     fi
 }
 
+gentoo_atom_is_installed() {
+    local atom="$1" installed_atom="${1%%::*}" status
+    if portageq has_version / "$installed_atom"; then
+        return 0
+    else
+        status=$?
+    fi
+    if (( status == 1 )); then
+        return 1
+    fi
+    echo "Failed to query the installed Gentoo package database for '$installed_atom'." >&2
+    return "$status"
+}
+
 ensure_gentoo_hyproverlay() {
     if ! command -v emerge >/dev/null 2>&1; then
         echo "emerge is unavailable; cannot install the Gentoo package set." >&2
+        return 1
+    fi
+    if ! command -v portageq >/dev/null 2>&1; then
+        echo "portageq is unavailable; cannot safely determine which Gentoo packages need installation." >&2
         return 1
     fi
     if ! command -v eselect >/dev/null 2>&1; then
@@ -859,7 +877,8 @@ ensure_gentoo_hyproverlay() {
 }
 
 install_gentoo_packages() {
-    local atom
+    local atom status
+    local -a pending_atoms=()
     (( CONFIG_ONLY || SKIP_PACKAGES || DRY_RUN || AUDIT_ONLY )) && return 0
     if ((${#UNMAPPED_COMMANDS[@]})); then
         echo "These required Gentoo components are not provided by Hyproverlay and must be installed manually before configuration deployment:" >&2
@@ -881,10 +900,23 @@ install_gentoo_packages() {
             *) MISSING_PACKAGES+=("$GENTOO_OPENRC_REQUIRED_ATOM") ;;
         esac
     fi
-    echo "Suggested Gentoo atoms:"; print_list "${MISSING_PACKAGES[@]}"
+    for atom in "${MISSING_PACKAGES[@]}"; do
+        if gentoo_atom_is_installed "$atom"; then
+            echo "[OK] Gentoo package already installed: $atom"
+        else
+            status=$?
+            (( status == 1 )) || return "$status"
+            pending_atoms+=("$atom")
+        fi
+    done
+    if ((${#pending_atoms[@]} == 0)); then
+        echo "All required Gentoo atoms are already installed; skipping emerge."
+        return 0
+    fi
+    echo "Gentoo atoms to install:"; print_list "${pending_atoms[@]}"
     echo "Suggested USE flags (not applied):"
     for atom in "${!GENTOO_USE_FLAGS[@]}"; do echo "  $atom USE=\"${GENTOO_USE_FLAGS[$atom]}\""; done
-    install_gentoo_emerge --oneshot --verbose "${MISSING_PACKAGES[@]}"
+    install_gentoo_emerge --oneshot --verbose "${pending_atoms[@]}"
 }
 
 install_optional_arch_packages() {
