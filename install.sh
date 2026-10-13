@@ -293,7 +293,9 @@ declare -A ARCH_OPTIONAL_AUR=(
 # Gentoo mappings remain atoms only. Empty entries deliberately represent
 # components for which this repository has not verified a current Gentoo atom.
 declare -A GENTOO_COMMAND_PACKAGE=(
-    [hyprland]=gui-wm/hyprland
+    [hyprland]=gui-wm/hyprland::hyproverlay
+    [hyprlock]=gui-apps/hyprlock::hyproverlay
+    [hypridle]=gui-apps/hypridle::hyproverlay
     [waybar]=gui-apps/waybar
     [fish]=app-shells/fish
     [chsh]=sys-apps/util-linux
@@ -339,6 +341,10 @@ declare -A GENTOO_COMMAND_PACKAGE=(
     [unzip]=app-arch/unzip
 )
 GENTOO_REQUIRED_ATOMS=(
+    gui-wm/hyprland::hyproverlay
+    gui-apps/hyprlock::hyproverlay
+    gui-apps/hypridle::hyproverlay
+    gui-libs/xdg-desktop-portal-hyprland::hyproverlay
     media-fonts/noto
     x11-misc/sddm
     net-vpn/tailscale
@@ -353,11 +359,10 @@ declare -A GENTOO_USE_FLAGS=(
     [x11-themes/kvantum]="kde"
 )
 declare -A GENTOO_OVERLAY_NOTES=(
-    [swaync]="No verified main-repository atom in this audit; review the current Gentoo package tree or overlay."
-    [hyprlock]="No verified Gentoo atom in this audit; review hyproverlay or build manually."
-    [hypridle]="No verified Gentoo atom in this audit; review hyproverlay or build manually."
-    [awww]="No verified Gentoo atom in this audit; review hyproverlay or build manually."
-    [hyprpolkitagent]="No verified main-repository atom in this audit; review a current overlay or use another approved polkit agent."
+    [swaync]="Hyproverlay does not provide SwayNC; install swaync manually before configuration deployment."
+    [awww]="Hyproverlay does not provide awww; install awww manually before configuration deployment."
+    [awww-daemon]="Hyproverlay does not provide awww; install awww manually before configuration deployment."
+    [hyprpolkitagent]="Hyproverlay does not provide hyprpolkitagent; install it manually before configuration deployment."
 )
 
 REQUIRED_COMMANDS=(
@@ -818,18 +823,49 @@ install_arch_packages() {
     fi
 }
 
+install_gentoo_emerge() {
+    if (( NON_INTERACTIVE )); then
+        run_privileged emerge --oneshot --verbose --autounmask=y --autounmask-write \
+            --autounmask-continue "$@"
+    else
+        run_privileged emerge --ask --autounmask=y --autounmask-write \
+            --autounmask-continue "$@"
+    fi
+}
+
+ensure_gentoo_hyproverlay() {
+    if ! command -v emerge >/dev/null 2>&1; then
+        echo "emerge is unavailable; cannot install the Gentoo package set." >&2
+        return 1
+    fi
+    if ! command -v eselect >/dev/null 2>&1; then
+        echo "Installing eselect-repository to enable Hyproverlay..."
+        install_gentoo_emerge --noreplace app-eselect/eselect-repository
+    fi
+    if ! command -v eselect >/dev/null 2>&1; then
+        echo "eselect is still unavailable after installing app-eselect/eselect-repository." >&2
+        return 1
+    fi
+    if ! eselect repository list -i 2>/dev/null |
+        grep -Eq '(^|[[:space:]])hyproverlay([[:space:]*#@]|$)'; then
+        echo "Enabling the Hyproverlay Gentoo repository..."
+        run_privileged eselect repository enable hyproverlay
+    fi
+    echo "Synchronizing the Hyproverlay Gentoo repository..."
+    run_privileged emerge --sync hyproverlay
+}
+
 install_gentoo_packages() {
     local atom
     (( CONFIG_ONLY || SKIP_PACKAGES || DRY_RUN || AUDIT_ONLY )) && return 0
     if ((${#UNMAPPED_COMMANDS[@]})); then
-        echo "Gentoo has no verified atom mapping for required commands:" >&2
+        echo "These required Gentoo components are not provided by Hyproverlay and must be installed manually before configuration deployment:" >&2
         print_list "${UNMAPPED_COMMANDS[@]}" >&2
         for command_name in "${UNMAPPED_COMMANDS[@]}"; do
             [[ -n "${GENTOO_OVERLAY_NOTES[$command_name]:-}" ]] && echo "  ${GENTOO_OVERLAY_NOTES[$command_name]}" >&2
         done
-        echo "Review Portage/overlay choices manually; no configuration will be deployed." >&2
-        return 1
     fi
+    ensure_gentoo_hyproverlay || return 1
     for atom in "${GENTOO_REQUIRED_ATOMS[@]}"; do
         case " ${MISSING_PACKAGES[*]} " in
             *" $atom "*) ;;
@@ -845,15 +881,7 @@ install_gentoo_packages() {
     echo "Suggested Gentoo atoms:"; print_list "${MISSING_PACKAGES[@]}"
     echo "Suggested USE flags (not applied):"
     for atom in "${!GENTOO_USE_FLAGS[@]}"; do echo "  $atom USE=\"${GENTOO_USE_FLAGS[$atom]}\""; done
-    if ! command -v emerge >/dev/null 2>&1; then
-        echo "emerge is unavailable; install the listed atoms manually." >&2
-        return 1
-    fi
-    if (( NON_INTERACTIVE )); then
-        run_privileged emerge --oneshot --verbose "${MISSING_PACKAGES[@]}"
-    else
-        run_privileged emerge --ask "${MISSING_PACKAGES[@]}"
-    fi
+    install_gentoo_emerge --oneshot --verbose "${MISSING_PACKAGES[@]}"
 }
 
 install_optional_arch_packages() {

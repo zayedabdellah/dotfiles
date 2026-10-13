@@ -132,11 +132,15 @@ unrelated files are preserved. A complete restore/uninstall orchestrator is
 still future work.
 
 Arch and Gentoo are the supported targets for this imperative installer.
-Gentoo uses verified Portage atoms only and prints USE-flag/overlay guidance
-without changing Portage configuration. Fedora support is experimental and
-performs no automatic package installation. NixOS uses the native flake and Home
-Manager configuration in `nixos/`; do not run this imperative installer there.
-Follow [the fresh NixOS installation guide](docs/nixos-install.md).
+On Gentoo, the full installer enables and synchronizes Hyproverlay, installs the
+verified Hyprland packages with Portage autounmask changes accepted, then
+deploys the same user configuration. It does not alter global USE flags,
+keywords, masks, or licenses. `awww`, SwayNC, and `hyprpolkitagent` are not
+provided by Hyproverlay and must already be installed; missing required
+executables stop deployment safely. Fedora support is experimental and
+performs no automatic package installation. NixOS uses the native flake and
+Home Manager configuration in `nixos/`; do not run this imperative installer
+there. Follow [the fresh NixOS installation guide](docs/nixos-install.md).
 
 ### Tailscale and Bluetooth
 

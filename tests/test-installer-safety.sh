@@ -633,6 +633,15 @@ if command -v script >/dev/null 2>&1; then
 printf '%s\n' "emerge $*" >> "$DOTFILES_TEST_LOG"
 exit 0
 EOF
+    cat > "$openrc_bin/eselect" <<'EOF'
+#!/bin/sh
+printf '%s\n' "eselect $*" >> "$DOTFILES_TEST_LOG"
+case "$*" in
+    "repository list -i") printf '%s\n' '[1] gentoo *' ;;
+    "repository enable hyproverlay") ;;
+    *) exit 2 ;;
+esac
+EOF
     cat > "$openrc_bin/rc-update" <<'EOF'
 #!/bin/sh
 case "$1" in
@@ -656,7 +665,7 @@ if [ "$1" = --exists ]; then exit 0; fi
 printf '%s\n' "rc-service $*" >> "$DOTFILES_TEST_LOG"
 exit 0
 EOF
-    chmod +x "$openrc_bin/emerge" "$openrc_bin/rc-update" "$openrc_bin/rc-service"
+    chmod +x "$openrc_bin/emerge" "$openrc_bin/eselect" "$openrc_bin/rc-update" "$openrc_bin/rc-service"
     mkdir -p "$openrc_home/usr/share/wayland-sessions" "$openrc_home/etc/sddm.conf.d" \
         "$openrc_home/usr/share/icons" "$openrc_home/etc/conf.d"
     printf '%s\n' '[Desktop Entry]' 'Name=Hyprland' 'Exec=Hyprland' 'Type=Application' \
@@ -690,6 +699,55 @@ EOF
     grep -q 'net-vpn/tailscale' "$TEST_ROOT/commands.log"
     grep -q 'net-wireless/bluez' "$TEST_ROOT/commands.log"
     grep -q 'net-wireless/blueman' "$TEST_ROOT/commands.log"
+    [[ -f "$openrc_home/.config/hypr/hyprland.lua" ]]
+    grep -q '^eselect repository enable hyproverlay$' "$TEST_ROOT/commands.log"
+    grep -q '^emerge --sync hyproverlay$' "$TEST_ROOT/commands.log"
+    grep -q 'gui-wm/hyprland::hyproverlay' "$TEST_ROOT/commands.log"
+    grep -q 'gui-apps/hyprlock::hyproverlay' "$TEST_ROOT/commands.log"
+    grep -q 'gui-apps/hypridle::hyproverlay' "$TEST_ROOT/commands.log"
+    grep -q -- '--autounmask=y --autounmask-write --autounmask-continue' "$TEST_ROOT/commands.log"
+
+    manual_home="$TEST_ROOT/gentoo-manual-home"
+    manual_bin="$TEST_ROOT/gentoo-manual-bin"
+    make_mock_bin "$manual_bin"
+    make_mock_curl "$manual_bin"
+    for manual_command in swaync awww awww-daemon hyprpolkitagent; do
+        rm -f "$manual_bin/$manual_command"
+    done
+    cat > "$manual_bin/emerge" <<'EOF'
+#!/bin/sh
+printf '%s\n' "emerge $*" >> "$DOTFILES_TEST_LOG"
+exit 0
+EOF
+    cat > "$manual_bin/eselect" <<'EOF'
+#!/bin/sh
+printf '%s\n' "eselect $*" >> "$DOTFILES_TEST_LOG"
+case "$*" in
+    "repository list -i") printf '%s\n' '[1] gentoo *' ;;
+    "repository enable hyproverlay") ;;
+    *) exit 2 ;;
+esac
+EOF
+    chmod +x "$manual_bin/emerge" "$manual_bin/eselect"
+    mkdir -p "$manual_home/usr/share/wayland-sessions"
+    printf '%s\n' '[Desktop Entry]' 'Name=Hyprland' 'Exec=Hyprland' 'Type=Application' \
+        > "$manual_home/usr/share/wayland-sessions/hyprland.desktop"
+    : > "$TEST_ROOT/commands.log"
+    if HOME="$manual_home" PATH="$manual_bin:/usr/bin:/bin" \
+        XDG_CONFIG_HOME="$manual_home/.config" DOTFILES_DISTRO_ID=gentoo \
+        DOTFILES_TEST_LOG="$TEST_ROOT/commands.log" DOTFILES_INIT_SYSTEM=systemd \
+        DOTFILES_WAYLAND_SESSIONS_DIR="$manual_home/usr/share/wayland-sessions" \
+        /usr/bin/bash "$ROOT/install.sh" --non-interactive --profile generic --packages-only \
+        >"$TEST_ROOT/gentoo-manual.out" 2>&1; then
+        echo "Gentoo install without its manual Hyprland components unexpectedly succeeded" >&2
+        exit 1
+    fi
+    grep -q 'must be installed manually before configuration deployment' "$TEST_ROOT/gentoo-manual.out"
+    grep -q 'Hyproverlay does not provide awww' "$TEST_ROOT/gentoo-manual.out"
+    grep -q 'Hyproverlay does not provide SwayNC' "$TEST_ROOT/gentoo-manual.out"
+    grep -q 'Hyproverlay does not provide hyprpolkitagent' "$TEST_ROOT/gentoo-manual.out"
+    grep -q 'gui-apps/hyprlock::hyproverlay' "$TEST_ROOT/commands.log"
+    [[ ! -e "$manual_home/.config/hypr/hyprland.lua" ]]
 fi
 
 rm -f "$full_bin/awww"

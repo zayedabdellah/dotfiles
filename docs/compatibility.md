@@ -14,16 +14,24 @@ access afterward with the appropriate X server command for that session.
 
 ## Distribution support
 
-Arch is the immediate full-install target. Gentoo remains a primary target,
-but the installer only passes verified Gentoo `category/package` atoms to
-Portage and never adds overlays, keywords, masks, licenses, or USE flags
-automatically. If a required Hypr ecosystem atom is not verified, deployment
-stops before files are copied and the required manual review is printed.
+Arch is the immediate full-install target. Gentoo is also supported: a full
+install ensures `app-eselect/eselect-repository` is available, enables and
+synchronizes Hyproverlay, and installs its verified Hyprland packages alongside
+verified Gentoo atoms. The package transaction accepts Portage autounmask
+changes for its selected packages. It does not automatically change global USE
+flags, keywords, masks, or licenses. Portage-generated configuration updates
+may still need review/merging according to the host's Portage configuration.
+`awww`, SwayNC, and `hyprpolkitagent` are not provided by Hyproverlay and must
+be installed manually; missing required commands stop deployment before files
+are copied.
 
 Verified Gentoo examples used by the installer include:
 
 ```text
-gui-wm/hyprland
+gui-wm/hyprland::hyproverlay
+gui-apps/hyprlock::hyproverlay
+gui-apps/hypridle::hyproverlay
+gui-libs/xdg-desktop-portal-hyprland::hyproverlay
 gui-apps/waybar
 app-emulation/kitty
 app-shells/fish
@@ -52,12 +60,18 @@ Gentoo has no `bluez-utils` atom equivalent to Arch's split package.
 `net-wireless/bluez` is the valid atom for the Bluetooth daemon and standard
 tools, while `net-wireless/blueman` supplies both `blueman-manager` and
 `blueman-applet`. `net-vpn/tailscale` supplies the Tailscale client and
-daemon. Executable names are never passed to `emerge`.
+daemon.
+
+The installer never passes executable names to `emerge`. The selected
+Hyproverlay source is `https://codeberg.org/hyproverlay/hyproverlay.git`, as
+documented by the overlay maintainers. Audit/dry-run and configuration-only
+modes do not enable or synchronize repositories. Install the three unsupported
+components manually, then rerun the installer to deploy the configuration.
 
 On Gentoo/systemd the approved service path uses `bluetooth.service` and
 `tailscaled.service`. On OpenRC it uses the package-provided `bluetooth` and
 `tailscaled` services with `rc-update` and `rc-service`. The installer asks
-before either path and never edits Portage, BlueZ, or Tailscale configuration.
+before either path and never edits BlueZ or Tailscale configuration.
 Audit/dry-run and packages-only do not change services. The service tests are
 mocked; both init variants still require confirmation on a real Gentoo system.
 
@@ -70,9 +84,9 @@ subcommand with `tailscale systray --help` but never launches it in the
 non-graphical validation phase and never runs `tailscale up`.
 
 Waybar commonly needs `network`, `wifi`, `tray`, `mpris`, `pipewire`,
-`pulseaudio`, and `upower` USE support. Hyprland versions newer than the
-verified main-repository ebuild may require `hyproverlay`; this repository
-only prints that guidance and never enables it.
+`pulseaudio`, and `upower` USE support. The installer prints this guidance;
+Portage autounmask may generate per-package updates required by the selected
+transaction.
 
 Fedora/Nobara support is experimental and incomplete. This installer does not
 run `dnf` or `dnf5` automatically; the full Arch package path is not claimed
@@ -103,10 +117,9 @@ layout. The installer preserves unrelated entries in
 Qt6ct `style=kvantum`. An incomplete payload is a fatal validation error; no
 fallback theme is silently substituted.
 
-Fastfetch maps to `app-misc/fastfetch` on Gentoo. The installer continues to
-stop before deployment when any other required command lacks a verified
-Gentoo atom; it never passes executable names to `emerge` or edits Portage
-configuration.
+Fastfetch maps to `app-misc/fastfetch` on Gentoo. The installer installs the
+mapped packages but stops before deployment if any required command remains
+missing; it never passes executable names to `emerge`.
 
 ## Arabic font resolution
 
