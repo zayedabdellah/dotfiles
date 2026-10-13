@@ -29,11 +29,12 @@ Verified Gentoo examples used by the installer include:
 
 ```text
 gui-wm/hyprland::hyproverlay
+gui-apps/waybar::hyproverlay
 gui-apps/hyprlock::hyproverlay
 gui-apps/hypridle::hyproverlay
+gui-apps/hyprshutdown::hyproverlay
 gui-libs/xdg-desktop-portal-hyprland::hyproverlay
-gui-apps/waybar
-app-emulation/kitty
+x11-terms/kitty
 app-shells/fish
 app-misc/fastfetch
 sys-apps/util-linux
@@ -54,7 +55,15 @@ app-misc/btop
 net-vpn/tailscale
 net-wireless/bluez
 net-wireless/blueman
+sys-power/power-profiles-daemon
 ```
+
+Hyproverlay's Waybar ebuild adds the Hyprland Lua IPC patch used by this
+repository's Waybar configuration. The corresponding Gentoo atom is
+`gui-apps/waybar::hyproverlay`; it is not substituted with the ::gentoo
+Waybar package. `kitty` is
+[`x11-terms/kitty`](https://packages.gentoo.org/packages/x11-terms/kitty) in
+the official Gentoo tree.
 
 Gentoo has no `bluez-utils` atom equivalent to Arch's split package.
 `net-wireless/bluez` is the valid atom for the Bluetooth daemon and standard

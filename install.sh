@@ -293,10 +293,11 @@ declare -A ARCH_OPTIONAL_AUR=(
 # Gentoo mappings remain atoms only. Empty entries deliberately represent
 # components for which this repository has not verified a current Gentoo atom.
 declare -A GENTOO_COMMAND_PACKAGE=(
+    [Hyprland]=gui-wm/hyprland::hyproverlay
     [hyprland]=gui-wm/hyprland::hyproverlay
     [hyprlock]=gui-apps/hyprlock::hyproverlay
     [hypridle]=gui-apps/hypridle::hyproverlay
-    [waybar]=gui-apps/waybar
+    [waybar]=gui-apps/waybar::hyproverlay
     [fish]=app-shells/fish
     [chsh]=sys-apps/util-linux
     [getent]=sys-libs/glibc
@@ -307,7 +308,7 @@ declare -A GENTOO_COMMAND_PACKAGE=(
     [jq]=app-misc/jq
     [gsettings]=dev-libs/glib
     [xdg-user-dirs-update]=x11-misc/xdg-user-dirs
-    [kitty]=app-emulation/kitty
+    [kitty]=x11-terms/kitty
     [rofi]=gui-apps/rofi
     [thunar]=xfce-base/thunar
     [mpv]=media-video/mpv
@@ -318,6 +319,7 @@ declare -A GENTOO_COMMAND_PACKAGE=(
     [slurp]=gui-apps/slurp
     [wl-copy]=gui-apps/wl-clipboard
     [brightnessctl]=sys-power/brightnessctl
+    [powerprofilesctl]=sys-power/power-profiles-daemon
     [playerctl]=media-sound/playerctl
     [pavucontrol-qt]=media-sound/pavucontrol-qt
     [nmtui]=net-misc/networkmanager
@@ -342,8 +344,10 @@ declare -A GENTOO_COMMAND_PACKAGE=(
 )
 GENTOO_REQUIRED_ATOMS=(
     gui-wm/hyprland::hyproverlay
+    gui-apps/waybar::hyproverlay
     gui-apps/hyprlock::hyproverlay
     gui-apps/hypridle::hyproverlay
+    gui-apps/hyprshutdown::hyproverlay
     gui-libs/xdg-desktop-portal-hyprland::hyproverlay
     media-fonts/noto
     x11-misc/sddm
@@ -353,8 +357,8 @@ GENTOO_REQUIRED_ATOMS=(
 )
 GENTOO_OPENRC_REQUIRED_ATOM=gui-libs/display-manager-init
 declare -A GENTOO_USE_FLAGS=(
-    [gui-wm/hyprland]="qtutils"
-    [gui-apps/waybar]="network wifi tray mpris pipewire pulseaudio upower"
+    [gui-wm/hyprland::hyproverlay]="qtutils"
+    [gui-apps/waybar::hyproverlay]="network wifi tray mpris pipewire pulseaudio upower logind"
     [media-video/pipewire]="alsa bluetooth pipewire-alsa pulseaudio sound-server"
     [x11-themes/kvantum]="kde"
 )
