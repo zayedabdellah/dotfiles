@@ -48,6 +48,7 @@ VALIDATION_STATUS="not run"
 FONT_PAYLOAD_CHANGED=0
 TARGET_USER=""
 TARGET_UID=""
+OH_MY_POSH_EXECUTABLE=""
 SHELLS_FILE="${DOTFILES_SHELLS_FILE:-/etc/shells}"
 SDDM_CONFIG_DIR="${DOTFILES_SDDM_CONFIG_DIR:-/etc/sddm.conf.d}"
 SYSTEM_ICON_DIR="${DOTFILES_SYSTEM_ICON_DIR:-/usr/share/icons}"
@@ -212,7 +213,7 @@ ARCH_REQUIRED_PACKAGES=(
     grim slurp wl-clipboard brightnessctl playerctl pavucontrol-qt
     networkmanager power-profiles-daemon bluez bluez-utils blueman tailscale
     dbus libnotify xorg-xrdb xsettingsd fontconfig iproute2 procps-ng
-    coreutils findutils gawk curl unzip xdg-utils xdg-user-dirs
+    coreutils findutils gawk curl xdg-utils xdg-user-dirs
     fastfetch util-linux jq noto-fonts sddm
 )
 
@@ -270,7 +271,6 @@ declare -A ARCH_COMMAND_PACKAGE=(
     [fc-cache]=fontconfig
     [ip]=iproute2
     [curl]=curl
-    [unzip]=unzip
 )
 
 # Optional packages are never installed unless the corresponding module was
@@ -340,7 +340,6 @@ declare -A GENTOO_COMMAND_PACKAGE=(
     [fc-cache]=media-libs/fontconfig
     [ip]=sys-apps/iproute2
     [curl]=net-misc/curl
-    [unzip]=app-arch/unzip
 )
 GENTOO_REQUIRED_ATOMS=(
     gui-wm/hyprland::hyproverlay
@@ -375,7 +374,7 @@ REQUIRED_COMMANDS=(
     grim slurp wl-copy brightnessctl playerctl pavucontrol-qt nmtui nmcli
     bluetoothctl blueman-manager blueman-applet tailscale tailscaled
     powerprofilesctl xrdb notify-send xsettingsd fc-cache fc-list fc-match ip
-    curl unzip gsettings xdg-user-dirs-update
+    gsettings xdg-user-dirs-update
 )
 
 have_command() {
@@ -980,25 +979,78 @@ verify_required_commands() {
 
 install_oh_my_posh() {
     local target="$HOME/.local/bin/oh-my-posh" version="${OH_MY_POSH_VERSION:-v29.31.1}"
+    local architecture asset_name download_url checksums_url temporary_binary temporary_checksums expected_checksum actual_checksum
+    OH_MY_POSH_EXECUTABLE="$(type -P oh-my-posh || true)"
+    if [[ -n "$OH_MY_POSH_EXECUTABLE" && -x "$OH_MY_POSH_EXECUTABLE" ]]; then
+        echo "[OK] Oh My Posh already installed: $OH_MY_POSH_EXECUTABLE"
+        return 0
+    fi
     if [[ -x "$target" ]]; then
-        echo "[OK] Oh My Posh: $target"
+        OH_MY_POSH_EXECUTABLE="$target"
+        echo "[OK] Oh My Posh: $OH_MY_POSH_EXECUTABLE"
         return 0
     fi
     if (( AUDIT_ONLY || DRY_RUN )); then
-        echo "DRY-RUN: would install Oh My Posh $version to $target using the official upstream installer; no download performed."
+        echo "DRY-RUN: would download and verify the Oh My Posh $version Linux release binary to $target; no download performed."
         return 0
     fi
     if [[ "$DISTRO_ID" == nixos ]]; then
         echo "NixOS requires a declarative Home Manager Oh My Posh option; no download was attempted." >&2
         return 1
     fi
-    for helper in curl unzip; do
-        have_command "$helper" || { echo "Oh My Posh requires $helper." >&2; return 1; }
-    done
+    have_command curl || { echo "Oh My Posh installation requires curl." >&2; return 1; }
+    command -v sha256sum >/dev/null 2>&1 || {
+        echo "Oh My Posh installation requires sha256sum to verify the release binary." >&2
+        return 1
+    }
+    case "$(uname -m)" in
+        x86_64) architecture=amd64 ;;
+        aarch64|arm64) architecture=arm64 ;;
+        armv*) architecture=arm ;;
+        *)
+            echo "Oh My Posh has no supported Linux release for architecture '$(uname -m)'." >&2
+            return 1
+            ;;
+    esac
+    asset_name="posh-linux-$architecture"
+    download_url="https://github.com/JanDeDobbeleer/oh-my-posh/releases/download/$version/$asset_name"
+    checksums_url="https://github.com/JanDeDobbeleer/oh-my-posh/releases/download/$version/checksums.txt"
+
     mkdir -p "$(dirname -- "$target")"
-    echo "Installing Oh My Posh $version to $target..."
-    curl -fsSL https://ohmyposh.dev/install.sh | bash -s -- -d "$HOME/.local/bin" -v "$version"
-    [[ -x "$target" ]] || { echo "Oh My Posh installation did not create $target." >&2; return 1; }
+    temporary_binary="$(mktemp "$target.tmp.XXXXXX")"
+    temporary_checksums="$(mktemp)"
+    trap 'rm -f "$temporary_binary" "$temporary_checksums"' RETURN
+    echo "Downloading Oh My Posh $version release binary to $target..."
+    if ! curl -fsSL --retry 3 --retry-delay 1 "$download_url" -o "$temporary_binary"; then
+        echo "Failed to download Oh My Posh from $download_url." >&2
+        return 1
+    fi
+    if ! curl -fsSL --retry 3 --retry-delay 1 "$checksums_url" -o "$temporary_checksums"; then
+        echo "Failed to download the Oh My Posh release checksums from $checksums_url." >&2
+        return 1
+    fi
+    expected_checksum="$(awk -v asset="$asset_name" '$2 == asset { print $1; count++ } END { if (count != 1) exit 1 }' "$temporary_checksums")" || {
+        echo "The Oh My Posh release checksums do not contain exactly one entry for $asset_name." >&2
+        return 1
+    }
+    [[ "$expected_checksum" =~ ^[[:xdigit:]]{64}$ ]] || {
+        echo "The Oh My Posh release checksum for $asset_name is malformed." >&2
+        return 1
+    }
+    actual_checksum="$(sha256sum "$temporary_binary" | awk '{ print $1 }')"
+    if [[ "$actual_checksum" != "$expected_checksum" ]]; then
+        echo "Oh My Posh checksum verification failed for $asset_name." >&2
+        return 1
+    fi
+    chmod 755 "$temporary_binary"
+    mv -f "$temporary_binary" "$target"
+    OH_MY_POSH_EXECUTABLE="$target"
+    trap - RETURN
+    rm -f "$temporary_checksums"
+    [[ -x "$OH_MY_POSH_EXECUTABLE" ]] || {
+        echo "Oh My Posh installation did not create executable $target." >&2
+        return 1
+    }
 }
 
 configure_fish_shell() {
@@ -1841,7 +1893,8 @@ validate_deployment() {
         echo "[FAILED] Fastfetch rejected the deployed configuration." >&2
         failed=1
     fi
-    if ! "$HOME/.local/bin/oh-my-posh" print primary --config "$HOME/.themes/torii-zayed.omp.json" --shell fish --plain >/dev/null; then
+    if [[ -z "$OH_MY_POSH_EXECUTABLE" || ! -x "$OH_MY_POSH_EXECUTABLE" ]] ||
+        ! "$OH_MY_POSH_EXECUTABLE" print primary --config "$HOME/.themes/torii-zayed.omp.json" --shell fish --plain >/dev/null; then
         echo "[FAILED] pinned Oh My Posh rejected the deployed theme." >&2
         failed=1
     fi

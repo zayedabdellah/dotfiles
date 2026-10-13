@@ -14,7 +14,7 @@ make_mock_bin() {
         mangohud cava grim slurp wl-copy brightnessctl playerctl pavucontrol-qt nmtui \
         nmcli bluetoothctl blueman-manager blueman-applet tailscaled powerprofilesctl \
         xrdb notify-send xsettingsd fc-cache ip \
-        curl unzip pacman fastfetch sddm gsettings xdg-user-dirs-update; do
+        curl pacman fastfetch sddm gsettings xdg-user-dirs-update; do
         ln -s /bin/true "$bin/$command_name"
     done
     cat > "$bin/tailscale" <<'EOF'
@@ -194,22 +194,43 @@ make_mock_curl() {
     rm -f "$bin/curl"
     cat > "$bin/curl" <<'EOF'
 #!/bin/sh
+output=
+url=
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -o) output="$2"; shift 2 ;;
+        *) url="$1"; shift ;;
+    esac
+done
 if [ "${DOTFILES_CURL_FAIL:-0}" = 1 ]; then
-    printf '%s\n' "curl $*" >> "$DOTFILES_TEST_LOG"
+    printf '%s\n' "curl $url" >> "$DOTFILES_TEST_LOG"
     exit 77
 fi
-cat <<'INSTALLER'
-#!/bin/bash
-destination="$HOME/.local/bin"
-while (($# > 0)); do
-    if [[ "$1" == "-d" ]]; then destination="$2"; shift 2; else shift; fi
-done
-mkdir -p "$destination"
-printf '%s\n' '#!/bin/sh' 'exit 0' > "$destination/oh-my-posh"
-chmod +x "$destination/oh-my-posh"
-INSTALLER
+printf '%s\n' "curl $url" >> "$DOTFILES_TEST_LOG"
+case "$url" in
+*/checksums.txt)
+    checksum="$(printf '%s\n' '#!/bin/sh' 'exit 0' | sha256sum | awk '{ print $1 }')"
+    printf '%s  posh-linux-amd64\n' "$checksum" > "$output"
+    ;;
+    */posh-linux-amd64)
+    printf '%s\n' '#!/bin/sh' 'exit 0' > "$output"
+    ;;
+    *)
+        exit 78
+        ;;
+esac
 EOF
     chmod +x "$bin/curl"
+}
+
+link_system_commands_without_oh_my_posh() {
+    local bin="$1" candidate command_name
+    for candidate in /usr/bin/*; do
+        [[ -f "$candidate" && -x "$candidate" ]] || continue
+        command_name="${candidate##*/}"
+        [[ "$command_name" == oh-my-posh || -e "$bin/$command_name" ]] && continue
+        ln -s "$candidate" "$bin/$command_name"
+    done
 }
 
 make_mock_pacman() {
@@ -255,7 +276,7 @@ Type=Application
 EOF
     fi
     HOME="$home" \
-    PATH="$bin:/usr/bin:/bin" \
+    PATH="$bin:${DOTFILES_TEST_SYSTEM_PATH-/usr/bin:/bin}" \
     XDG_CONFIG_HOME="$home/.config" \
     DOTFILES_DISTRO_ID=arch \
     DOTFILES_TEST_LOG="$TEST_ROOT/commands.log" \
@@ -351,8 +372,24 @@ mkdir -p "$full_home"
 make_mock_bin "$full_bin"
 make_mock_curl "$full_bin"
 make_mock_pacman "$full_bin"
+link_system_commands_without_oh_my_posh "$full_bin"
+mkdir -p "$TEST_ROOT/empty-system-path"
+
+existing_omp_home="$TEST_ROOT/existing-omp-home"
+existing_omp_bin="$TEST_ROOT/existing-omp-bin"
+mkdir -p "$existing_omp_home"
+make_mock_bin "$existing_omp_bin"
+make_mock_curl "$existing_omp_bin"
+rm -f "$existing_omp_bin/curl"
+ln -s /bin/true "$existing_omp_bin/oh-my-posh"
 : > "$TEST_ROOT/commands.log"
-run_installer "$full_home" "$full_bin" --non-interactive --profile generic >/dev/null
+run_installer "$existing_omp_home" "$existing_omp_bin" --non-interactive --profile generic --config-only >/dev/null
+[[ ! -e "$existing_omp_home/.local/bin/oh-my-posh" ]]
+! grep -q '^curl ' "$TEST_ROOT/commands.log"
+
+: > "$TEST_ROOT/commands.log"
+DOTFILES_TEST_SYSTEM_PATH="$TEST_ROOT/empty-system-path" \
+    run_installer "$full_home" "$full_bin" --non-interactive --profile generic >/dev/null
 grep -q 'pacman .*hyprland' "$TEST_ROOT/commands.log"
 grep -q 'xdg-desktop-portal-hyprland' "$TEST_ROOT/commands.log"
 grep -q 'fastfetch' "$TEST_ROOT/commands.log"
@@ -367,7 +404,12 @@ grep -q 'tailscale' "$TEST_ROOT/commands.log"
 arch_package_block="$(sed -n '/^ARCH_REQUIRED_PACKAGES=(/,/^)/p' "$ROOT/install.sh")"
 [[ "$(grep -oE '(^|[[:space:]])bluez([[:space:]]|$)' <<<"$arch_package_block" | wc -l)" == 1 ]]
 [[ "$(grep -oE '(^|[[:space:]])bluez-utils([[:space:]]|$)' <<<"$arch_package_block" | wc -l)" == 1 ]]
+! grep -qE '(^|[[:space:]])unzip([[:space:]]|$)' <<<"$arch_package_block"
 [[ -x "$full_home/.local/bin/oh-my-posh" ]]
+[[ "$(grep -c '^curl ' "$TEST_ROOT/commands.log")" == 2 ]]
+grep -q '^curl https://github.com/JanDeDobbeleer/oh-my-posh/releases/download/v29.31.1/posh-linux-amd64$' "$TEST_ROOT/commands.log"
+grep -q '^curl https://github.com/JanDeDobbeleer/oh-my-posh/releases/download/v29.31.1/checksums.txt$' "$TEST_ROOT/commands.log"
+
 [[ -f "$full_home/.config/hypr/wallpapers/torii.jpg" ]]
 [[ -f "$full_home/.config/fastfetch/config.jsonc" ]]
 [[ -f "$full_home/.config/fastfetch/claude.txt" ]]

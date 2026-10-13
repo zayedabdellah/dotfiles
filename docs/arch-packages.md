@@ -95,9 +95,11 @@ brave            -> brave-bin
 An existing `paru` or `yay` and a separate confirmation are required. The
 installer never installs an AUR helper and never copies a Brave profile.
 
-Oh My Posh is a pinned user-local upstream installation (`v29.31.1`) rather
-than a distro package. Its exact theme is deployed to
-`~/.themes/torii-zayed.omp.json`.
+Oh My Posh is pinned to upstream release `v29.31.1` rather than a distro
+package. The installer skips installation when an executable is already on
+`PATH`; otherwise, it downloads the Linux release binary and verifies the
+published SHA-256 checksum before installing it to `~/.local/bin`. Its exact
+theme is deployed to `~/.themes/torii-zayed.omp.json`.
 
 The installer uses exactly `pacman -S --needed` for interactive installation
 (`--noconfirm` is added only for explicitly non-interactive mode). It does not
