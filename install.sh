@@ -1297,6 +1297,8 @@ validate_repository_payload() {
         "$CONFIG_DIR/hypr/wallpapers/torii.jpg" \
         "$CONFIG_DIR/hypr/scripts/wallpaper.sh" \
         "$CONFIG_DIR/hypr/scripts/hyprlock.sh" \
+        "$CONFIG_DIR/waybar/config.jsonc.template" \
+        "$CONFIG_DIR/waybar/scripts/microphone.sh" \
         "$SCRIPT_ROOT/icons/Bibata-Modern-Amber/index.theme" \
         "$SCRIPT_ROOT/icons/Bibata-Modern-Amber/cursors/left_ptr" \
         "$SCRIPT_ROOT/icons/Bibata-Modern-Amber/hyprcursors/left_ptr.hlc" \
@@ -1310,6 +1312,10 @@ validate_repository_payload() {
     done
     [[ -x "$CONFIG_DIR/hypr/scripts/wallpaper.sh" ]] || {
         echo "[INVALID] wallpaper.sh must be executable in the repository." >&2
+        failed=1
+    }
+    [[ -x "$CONFIG_DIR/waybar/scripts/microphone.sh" ]] || {
+        echo "[INVALID] microphone.sh must be executable in the repository." >&2
         failed=1
     }
     kvantum_payload="$(find "$SCRIPT_ROOT/themes/kvantum/gruvbox-kvantum" -maxdepth 1 -type f -printf '%f\n' | sort)"
@@ -1833,6 +1839,7 @@ validate_deployment() {
         "$HOME/.config/hypr/wallpapers/torii.jpg" \
         "$HOME/.config/waybar/config.jsonc" \
         "$HOME/.config/waybar/config.jsonc.template" \
+        "$HOME/.config/waybar/scripts/microphone.sh" \
         "$HOME/.config/btop/themes/gruvbox_dark_v2.theme" \
         "$HOME/.config/fastfetch/config.jsonc" \
         "$HOME/.config/fastfetch/claude.txt" \
@@ -1849,9 +1856,11 @@ validate_deployment() {
         [[ -r "$path" ]] || { echo "[MISSING OR UNREADABLE] $path" >&2; failed=1; }
     done
     [[ -x "$HOME/.config/hypr/scripts/wallpaper.sh" ]] || { echo "[INVALID] deployed wallpaper.sh is not executable" >&2; failed=1; }
+    [[ -x "$HOME/.config/waybar/scripts/microphone.sh" ]] || { echo "[INVALID] deployed microphone.sh is not executable" >&2; failed=1; }
     grep -q 'persistent-workspaces.*\[1, 2, 3, 4, 5\]' "$HOME/.config/waybar/config.jsonc.template" || { echo "[MISSING] Waybar persistent workspaces 1-5" >&2; failed=1; }
     grep -Fq '"modules-left": ["hyprland/workspaces", "hyprland/window", "power-profiles-daemon", "tray"]' "$HOME/.config/waybar/config.jsonc.template" || { echo "[REGRESSION] Waybar module order changed" >&2; failed=1; }
     grep -Fq '"on-click": "hyprctl dispatch workspace {name}"' "$HOME/.config/waybar/config.jsonc.template" || { echo "[REGRESSION] Waybar workspace dispatcher changed" >&2; failed=1; }
+    grep -Fq '"custom/microphone"' "$HOME/.config/waybar/config.jsonc.template" || { echo "[MISSING] Waybar microphone module" >&2; failed=1; }
     grep -q '^color_theme = "gruvbox_dark_v2"' "$HOME/.config/btop/btop.conf" || { echo "[MISSING] btop Gruvbox theme selection" >&2; failed=1; }
     kvantum_selector_is_active "$HOME/.config/Kvantum/kvantum.kvconfig" || { echo "[MISSING] Kvantum selector" >&2; failed=1; }
     grep -q '^style=kvantum$' "$HOME/.config/qt6ct/qt6ct.conf" || { echo "[MISSING] Qt6ct Kvantum style selection" >&2; failed=1; }

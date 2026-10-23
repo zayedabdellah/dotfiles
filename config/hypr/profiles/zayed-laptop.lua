@@ -19,7 +19,6 @@ return {
     network_interface = "wlp3s0",
     gpu_driver = "nvidia",
     mangohud_gpu_list = "0",
-    qt_scale_factor = "2",
     env = {
         XCURSOR_THEME = "Bibata-Modern-Amber",
         XCURSOR_SIZE = "24",
@@ -32,13 +31,12 @@ return {
         XDG_CURRENT_DESKTOP = "Hyprland",
         XDG_SESSION_TYPE = "wayland",
         XDG_SESSION_DESKTOP = "Hyprland",
-        QT_AUTO_SCREEN_SCALE_FACTOR = "0",
-        QT_ENABLE_HIGHDPI_SCALING = "0",
         QT_QPA_PLATFORMTHEME = "qt6ct",
         QT_WAYLAND_DISABLE_WINDOWDECORATION = "1",
         QT_NO_XDG_DESKTOP_PORTAL = "1",
         GTK_THEME = "gruvbox-dark-gtk",
-        GDK_SCALE = "2",
+        -- Let native Wayland GTK clients use the compositor output scale.
+        -- XFT_DPI below remains for XWayland clients with force_zero_scaling.
         XFT_DPI = "192",
         LIBVA_DRIVER_NAME = "nvidia",
         GBM_BACKEND = "nvidia-drm",
@@ -57,7 +55,7 @@ return {
         browser = "brave-browser-stable",
         hyprlock = home .. "/.config/hypr/scripts/hyprlock.sh",
         osd = home .. "/.config/hypr/scripts/osd.sh",
-        waybar_launcher = home .. "/.config/waybar/launch.sh",
+        waybar_launcher = "waybar -c ~/.config/waybar/config.jsonc",
         waybar_top_config = home .. "/.config/waybar/config-top.jsonc",
         media_daemon = home .. "/.config/waybar/scripts/media-daemon.sh",
         pipewire_launcher = "if command -v gentoo-pipewire-launcher >/dev/null 2>&1; then gentoo-pipewire-launcher; elif command -v systemctl >/dev/null 2>&1; then systemctl --user start pipewire pipewire-pulse wireplumber; fi",

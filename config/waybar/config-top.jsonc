@@ -2,13 +2,14 @@
   "name": "media-bar",
   "layer": "top",
   "position": "top",
-  "height": 40,
-  "exclusive": true, // Tells the WM to push windows down
+  "height": 36,
+  "exclusive": true,
   "modules-center": ["custom/media"],
   "custom/media": {
     "exec": "playerctl metadata --format '{{ artist }} - {{ title }}'",
     "interval": 2,
     "format": "󰎈 {}",
+    "max-length": 50,
     "on-click": "kitty -e cava",
     "on-click-right": "kitty -e cava"
   }

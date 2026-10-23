@@ -22,7 +22,7 @@
 window#waybar {
   background: transparent;
   font-family: "JetBrains Mono", "Noto Kufi Arabic", sans-serif;
-  font-size: 14pt;
+  font-size: 11pt;
 }
 
 /* Apply the dark background ONLY to the bottom bar */
@@ -38,95 +38,110 @@ window#waybar.media-bar {
 /* Whenever this bar is spawned by the daemon, render it instantly */
 #custom-media {
   background: #000000;          /* Solid black background */
-  border: 2pt solid #ffffff;    /* Solid white outline */
-  padding: 4pt 10pt;
-  margin: 3pt 0;
-  font-size: 11pt;
+  border: 1.5pt solid #ffffff;    /* Standardized to 1.5pt */
+  padding: 2px 8px;
+  margin: 2px 0;
+  font-size: 10pt;
   color: #ffffff;
 }
 
 /* Active State: Automatically pops up cleanly with a black background and white outline */
 #custom-media.playing {
   background: #000000;          /* Solid black background */
-  border: 2pt solid #ffffff;    /* Solid white outline */
-  padding: 4pt 10pt;
-  margin: 3pt 0;
-  font-size: 11pt;
+  border: 1.5pt solid #ffffff;    /* Standardized to 1.5pt */
+  padding: 2px 8px;
+  margin: 2px 0;
+  font-size: 10pt;
   color: #ffffff;
 }
 
 /* --- Bottom Bar Modules Styling --- */
 #workspaces {
-  border: 2pt solid @torii_orange;
-  margin: 3pt 2pt;
-  padding: 0 2pt;
+  border: 1.5pt solid @torii_orange;
+  margin: 2px;
+  padding: 0 2px;
 }
 
 #workspaces button {
-  padding: 0 4pt;
+  padding: 0 4px;
   margin: 0;
   font-size: 10pt;
   color: @text_muted;
-  border-bottom: 2pt solid transparent; 
+  border-bottom: 1.5pt solid transparent;
 }
 
 #workspaces button.active {
   color: #ffffff;
-  border-bottom: 2pt solid #ffffff;
+  border-bottom: 1.5pt solid #ffffff;
 }
 
 #window {
-  border: 2pt solid @path_grey;
-  padding: 0 6pt;
-  margin: 3pt 4pt; 
+  border: 1.5pt solid @path_grey;
+  padding: 0 6px;
+  margin: 2px 4px;
 }
 
 #tray {
-  border: 2pt solid @weathered_red;
-  padding: 0 6pt;
-  margin: 3pt 2pt;
+  border: 1.5pt solid @weathered_red;
+  padding: 0 6px;
+  margin: 2px;
 }
 
 #clock {
-  border: 2pt solid @torii_orange;
-  padding: 0 8pt;
-  margin: 3pt 0;
+  border: 1.5pt solid @torii_orange;
+  padding: 0 6px;
+  margin: 2px 0;
 }
 
 #cpu {
-  border: 2pt solid @soft_amber;
-  padding: 0 6pt;
-  margin: 3pt 0;
+  border: 1.5pt solid @soft_amber;
+  padding: 0 6px;
+  margin: 2px 0;
 }
 
 #memory {
-  border: 2pt solid @weathered_red;
-  padding: 0 6pt;
-  margin: 3pt 0;
+  border: 1.5pt solid @weathered_red;
+  padding: 0 6px;
+  margin: 2px 0;
 }
 
 #wireplumber {
-  border: 2pt solid @torii_orange;
+  border: 1.5pt solid @torii_orange;
   background: transparent;
-  padding: 0 6pt;
-  margin: 3pt 0;
+  padding: 0 6px;
+  margin: 2px 0;
 }
 
-#backlight {
-  border: 2pt solid @weathered_red;
+#custom-microphone {
+  border: 1px solid @path_grey;
   background: transparent;
-  padding: 0 6pt;
-  margin: 3pt 0;
+  padding: 0 6px;
+  margin: 2px 0;
+  color: @text_muted;
+}
+
+#custom-microphone.recording {
+  border: 1.5pt solid @torii_orange;
+  background: alpha(@torii_orange, 0.18);
+  padding: 0 9px;
+  color: @torii_orange;
+  font-weight: bold;
+}
+
+#custom-microphone.muted,
+#custom-microphone.unavailable {
+  border: 1px solid @path_grey;
+  color: @text_muted;
 }
 
 #battery {
-  border: 2pt solid @deep_shadow;
-  padding: 0 6pt;
-  margin: 3pt 0;
+  border: 1.5pt solid @deep_shadow;
+  padding: 0 6px;
+  margin: 2px 0;
 }
 
 #battery.charging {
-  border: 2pt solid #27ff4f;
+  border: 1.5pt solid #27ff4f;
   color: #27ff4f;
 }
 
@@ -134,38 +149,40 @@ window#waybar.media-bar {
   color: #27ff4f;
 }
 
-#network {
-  border: 2pt solid @torii_orange;
+#custom-network,
+#custom-brightness {
+  border: 1.5pt solid @torii_orange;
   background: transparent;
-  padding: 0 8pt; /* Extra balance padding for icon-only look */
-  margin: 3pt 0;
+  padding: 0 6px;
+  margin: 2px 0;
 }
 
-#network.disconnected {
-  border: 2pt solid @path_grey;
+#custom-network.disconnected,
+#custom-brightness.unavailable {
+  border: 1.5pt solid @path_grey;
   color: @text_muted;
-  padding: 0 8pt;
+  padding: 0 6px;
 }
 
 /* --- Power Profiles Daemon Styling --- */
 #power-profiles-daemon {
-  padding: 0 6pt;
-  margin: 3pt 2pt;
-  border: 2pt solid @path_grey;
+  padding: 0 6px;
+  margin: 2px;
+  border: 1.5pt solid @path_grey;
 }
 
 #power-profiles-daemon.power-saver {
-  border: 2pt solid #a6da95;
+  border: 1.5pt solid #a6da95;
   color: #a6da95;
 }
 
 #power-profiles-daemon.balanced {
-  border: 2pt solid @soft_amber;
+  border: 1.5pt solid @soft_amber;
   color: #ffffff;
 }
 
 #power-profiles-daemon.performance {
-  border: 2pt solid #ff4f27;
+  border: 1.5pt solid #ff4f27;
   color: #ff4f27;
 }
 
@@ -184,11 +201,12 @@ window#waybar.media-bar {
 #cpu,
 #memory,
 #wireplumber,
-#backlight,
-#network,
+#custom-microphone,
+#custom-brightness,
+#custom-network,
 #battery,
 #power-profiles-daemon,
 #custom-media {
   font-family: "JetBrains Mono", "Symbols Nerd Font", "Symbols Nerd Font Mono", "Noto Kufi Arabic", sans-serif;
-  font-size: 14pt;
+  font-size: 11pt;
 }

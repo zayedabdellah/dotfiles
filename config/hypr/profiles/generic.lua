@@ -52,7 +52,7 @@ return {
         browser = "brave-browser",
         hyprlock = home .. "/.config/hypr/scripts/hyprlock.sh",
         osd = home .. "/.config/hypr/scripts/osd.sh",
-        waybar_launcher = home .. "/.config/waybar/launch.sh",
+        waybar_launcher = "waybar -c ~/.config/waybar/config.jsonc",
         waybar_top_config = home .. "/.config/waybar/config-top.jsonc",
         media_daemon = home .. "/.config/waybar/scripts/media-daemon.sh",
         pipewire_launcher = "if command -v gentoo-pipewire-launcher >/dev/null 2>&1; then gentoo-pipewire-launcher; elif command -v systemctl >/dev/null 2>&1; then systemctl --user start pipewire pipewire-pulse wireplumber; fi",

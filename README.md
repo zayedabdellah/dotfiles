@@ -201,6 +201,11 @@ Its existing system tray remains enabled in the original module order and is
 where the Blueman and Tailscale StatusNotifier icons appear. Workspaces 1–5,
 media/Cava behavior, click actions, generic interface selection, and the
 `zayed-laptop` `wlp3s0` override remain unchanged.
+The right side also includes a reactive microphone indicator: it shows the
+active input device on hover and expands while recording. The volume and
+microphone indicators open `pavucontrol-qt` on Output Devices and Input
+Devices, respectively. The installer copies the shared Waybar template,
+stylesheet, and executable scripts for either machine profile.
 
 ### Themes
 

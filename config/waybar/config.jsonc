@@ -2,76 +2,89 @@
   "name": "bottom-bar",
   "layer": "top",
   "position": "bottom",
-  "height": 40,
+  "height": 34,
   "spacing": 4,
   "modules-left": ["hyprland/workspaces", "hyprland/window", "power-profiles-daemon", "tray"],
   "modules-center": ["clock"],
-  "modules-right": ["cpu", "memory", "wireplumber#sink", "backlight", "network", "battery"],
-  
-  "hyprland/workspaces": { 
-    "disable-scroll": true, 
-    "all-outputs": true, 
+  "modules-right": ["cpu", "memory", "wireplumber#sink", "custom/microphone", "custom/brightness", "custom/network", "battery"],
+
+  "hyprland/workspaces": {
+    "disable-scroll": true,
+    "all-outputs": true,
     "persistent-workspaces": {"*": [1, 2, 3, 4, 5]},
-    "format": "{name}", 
+    "format": "{name}",
     "on-click": "hyprctl dispatch workspace {name}"
   },
-  
-  "hyprland/window": { 
-    "format": "{title}", 
-    "max-length": 25 
+
+  "hyprland/window": {
+    "format": "{title}",
+    "max-length": 25
   },
-  
-  "tray": { 
-    "icon-size": 14, 
-    "spacing": 8 
+
+  "tray": {
+    "icon-size": 14,
+    "spacing": 8
   },
-  
-  "cpu": { 
-    "format": " {usage}%", 
-    "interval": 1, 
-    "on-click": "kitty -e btop" 
-  },
-  
-  "memory": { 
-    "interval": 1, 
-    "format": " {}%", 
-    "on-click": "kitty -e btop" 
-  },
-  
-  "wireplumber#sink": {
-    "format": " {volume}%", 
+
+  "cpu": {
+    "format": " {usage}%",
     "interval": 1,
-    "on-click": "pavucontrol-qt", 
-    "on-click-right": "~/.local/bin/volume-toggle"
+    "on-click": "kitty -e btop"
   },
 
-  "backlight": { 
-    "interval": 1, 
-    "format": "󰃠 {percent}%" 
+  "memory": {
+    "interval": 1,
+    "format": " {}%",
+    "on-click": "kitty -e btop"
   },
 
-  "network": {
-    "interface": "wlp3s0",
-    "format-wifi": "",
-    "format-ethernet": "󰈀",
-    "format-linked": "󰈀",
-    "format-disconnected": "󰖪",
-    "tooltip-format": "{ifname} via {gwaddr} ",
-    "tooltip-format-wifi": "{essid} ({signaldBm}dBm) ",
-    "tooltip-format-disconnected": "Disconnected",
-    "max-length": 20,
+  "wireplumber#sink": {
+    "format": " {volume}%",
+    "format-muted": " Muted",
+    "interval": 1,
+    "on-click": "pavucontrol-qt --tab=2",
+    "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+    "on-click-middle": "wpctl set-default $(wpctl status | grep -A 10 'Sinks:' | grep -v '\\*' | grep -E '[0-9]+\\.' | awk '{print $2}' | head -n 1)"
+  },
+
+  "custom/microphone": {
+    "exec": "$HOME/.config/waybar/scripts/microphone.sh",
+    "return-type": "json",
+    "format": "{}",
+    "interval": 1,
+    "tooltip": true,
+    "on-click": "pavucontrol-qt --tab=3"
+  },
+
+  "custom/brightness": {
+    "exec": "$HOME/.config/waybar/scripts/brightness.sh",
+    "return-type": "json",
+    "format": "{}",
+    "interval": 5,
+    "tooltip": true,
+    "on-click": "brightnessctl set +5%",
+    "on-click-right": "brightnessctl set 5%-"
+  },
+
+  "custom/network": {
+    "exec": "$HOME/.config/waybar/scripts/network.sh",
+    "return-type": "json",
+    "format": "{}",
+    "interval": 1,
+    "tooltip": true,
+    "max-length": 32,
     "on-click": "kitty -e nmtui"
   },
 
-  "battery": { 
-    "format": " {capacity}%", 
-    "format-charging": "󱐋 {capacity}%",
+  "battery": {
+    "format": " {capacity}%",
+    "format-charging": "   {capacity}%",
     "interval": 1
   },
-  
-  "clock": { 
-    "format": "{:%d/%m/%Y, %H:%M:%S}", 
-    "interval": 1 
+
+  "clock": {
+    "format": "{:%d/%m/%Y, %H:%M:%S}",
+    "interval": 1
   },
 
   "power-profiles-daemon": {
@@ -79,7 +92,7 @@
     "tooltip-format": "Power Profile: {profile}\nDriver: {driver}",
     "tooltip": true,
     "format-icons": {
-      "default": "󰾆",
+      "default": "  ",
       "performance": "",
       "balanced": "",
       "power-saver": ""

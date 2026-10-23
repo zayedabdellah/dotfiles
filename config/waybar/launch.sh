@@ -6,6 +6,7 @@ WAYBAR_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/waybar"
 WAYBAR_TEMPLATE="$WAYBAR_CONFIG_DIR/config.jsonc.template"
 WAYBAR_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 WAYBAR_RUNTIME_CONFIG="$WAYBAR_RUNTIME_DIR/dotfiles-waybar-${UID:-$(id -u)}.jsonc"
+WAYBAR_LOCK_DIR="$WAYBAR_RUNTIME_DIR/dotfiles-waybar-locks"
 
 if [[ ! -r "$WAYBAR_TEMPLATE" ]]; then
     echo "dotfiles: missing Waybar template: $WAYBAR_TEMPLATE" >&2
@@ -29,5 +30,5 @@ else
     sed '/"interface": "__DOTFILES_NETWORK_INTERFACE__"/d' "$WAYBAR_TEMPLATE" > "$WAYBAR_RUNTIME_CONFIG"
 fi
 
-pkill waybar 2>/dev/null || true
-waybar -c "$WAYBAR_RUNTIME_CONFIG" &
+mkdir -p "$WAYBAR_LOCK_DIR"
+exec flock -n "$WAYBAR_LOCK_DIR/bottom.lock" waybar -c "$WAYBAR_RUNTIME_CONFIG"

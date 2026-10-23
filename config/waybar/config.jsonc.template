@@ -2,11 +2,11 @@
   "name": "bottom-bar",
   "layer": "top",
   "position": "bottom",
-  "height": 40,
+  "height": 34,
   "spacing": 4,
   "modules-left": ["hyprland/workspaces", "hyprland/window", "power-profiles-daemon", "tray"],
   "modules-center": ["clock"],
-  "modules-right": ["cpu", "memory", "wireplumber#sink", "backlight", "network", "battery"],
+  "modules-right": ["cpu", "memory", "wireplumber#sink", "custom/microphone", "custom/brightness", "custom/network", "battery"],
 
   "hyprland/workspaces": {
     "disable-scroll": true,
@@ -40,32 +40,45 @@
 
   "wireplumber#sink": {
     "format": " {volume}%",
+    "format-muted": " Muted",
     "interval": 1,
-    "on-click": "pavucontrol-qt",
-    "on-click-right": "~/.local/bin/volume-toggle"
+    "on-click": "pavucontrol-qt --tab=2",
+    "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+    "on-click-middle": "wpctl set-default $(wpctl status | grep -A 10 'Sinks:' | grep -v '\\*' | grep -E '[0-9]+\\.' | awk '{print $2}' | head -n 1)"
   },
 
-  "backlight": {
+  "custom/microphone": {
+    "exec": "$HOME/.config/waybar/scripts/microphone.sh",
+    "return-type": "json",
+    "format": "{}",
     "interval": 1,
-    "format": "󰃠 {percent}%"
+    "tooltip": true,
+    "on-click": "pavucontrol-qt --tab=3"
   },
 
-  "network": {
-    "interface": "__DOTFILES_NETWORK_INTERFACE__",
-    "format-wifi": "",
-    "format-ethernet": "󰈀",
-    "format-linked": "󰈀",
-    "format-disconnected": "󰖪",
-    "tooltip-format": "{ifname} via {gwaddr} ",
-    "tooltip-format-wifi": "{essid} ({signaldBm}dBm) ",
-    "tooltip-format-disconnected": "Disconnected",
-    "max-length": 20,
+  "custom/brightness": {
+    "exec": "$HOME/.config/waybar/scripts/brightness.sh",
+    "return-type": "json",
+    "format": "{}",
+    "interval": 5,
+    "tooltip": true,
+    "on-click": "brightnessctl set +5%",
+    "on-click-right": "brightnessctl set 5%-"
+  },
+
+  "custom/network": {
+    "exec": "$HOME/.config/waybar/scripts/network.sh",
+    "return-type": "json",
+    "format": "{}",
+    "interval": 1,
+    "tooltip": true,
+    "max-length": 32,
     "on-click": "kitty -e nmtui"
   },
 
   "battery": {
     "format": " {capacity}%",
-    "format-charging": "󱐋 {capacity}%",
+    "format-charging": "   {capacity}%",
     "interval": 1
   },
 
@@ -79,7 +92,7 @@
     "tooltip-format": "Power Profile: {profile}\nDriver: {driver}",
     "tooltip": true,
     "format-icons": {
-      "default": "󰾆",
+      "default": "  ",
       "performance": "",
       "balanced": "",
       "power-saver": ""
