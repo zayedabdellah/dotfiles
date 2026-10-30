@@ -1204,7 +1204,11 @@ copy_file() {
     if [[ -f "$source" && -f "$destination" ]] && cmp -s "$source" "$destination"; then return 0; fi
     backup_existing "$destination"
     mkdir -p "$(dirname -- "$destination")"
-    cp -a "$source" "$destination"
+    if [[ -L "$destination" ]]; then
+        cp -a --remove-destination "$source" "$destination"
+    else
+        cp -a "$source" "$destination"
+    fi
     case "$destination" in
         "$HOME/.config/fontconfig/"*|"$HOME/.local/share/fonts/"*) FONT_PAYLOAD_CHANGED=1 ;;
     esac
@@ -1293,6 +1297,9 @@ validate_repository_payload() {
     for path in \
         "$CONFIG_DIR/fastfetch/config.jsonc" \
         "$CONFIG_DIR/fastfetch/claude.txt" \
+        "$CONFIG_DIR/nvim/init.lua" \
+        "$CONFIG_DIR/nvim/lazy-lock.json" \
+        "$CONFIG_DIR/nvim/README.md" \
         "$CONFIG_DIR/fontconfig/conf.d/65-noto-kufi-arabic.conf" \
         "$CONFIG_DIR/hypr/wallpapers/torii.jpg" \
         "$CONFIG_DIR/hypr/scripts/wallpaper.sh" \
@@ -1372,6 +1379,11 @@ validate_repository_payload() {
         jq empty "$SCRIPT_ROOT/themes/oh-my-posh/torii-zayed.omp.json" || failed=1
     else
         echo "[NOTICE] jq is not installed yet; JSON parsing will run after mandatory packages are installed."
+    fi
+    if command -v nvim >/dev/null 2>&1; then
+        nvim --headless -u NONE -i NONE --cmd "set rtp^=$CONFIG_DIR/nvim" \
+            -c "lua for _, f in ipairs(vim.fn.glob('$CONFIG_DIR/nvim/**/*.lua', false, true)) do assert(loadfile(f), f) end" \
+            -c 'qa!' || { echo "[INVALID] Neovim Lua configuration contains a syntax error." >&2; failed=1; }
     fi
     (( failed == 0 ))
 }
@@ -1471,7 +1483,7 @@ deploy_configuration() {
     persist_profile_selection
 
     local component
-    local core=(MangoHud Thunar btop cava fastfetch fish fontconfig gtk-3.0 gtk-4.0 hypr kitty mpv qt6ct rofi swaync xsettingsd)
+    local core=(MangoHud Thunar btop cava fastfetch fish fontconfig gtk-3.0 gtk-4.0 hypr kitty mpv nvim qt6ct rofi swaync xsettingsd)
     for component in "${core[@]}"; do
         [[ -d "$CONFIG_DIR/$component" ]] && copy_tree "$CONFIG_DIR/$component" "$HOME/.config/$component"
     done
@@ -1843,6 +1855,8 @@ validate_deployment() {
         "$HOME/.config/btop/themes/gruvbox_dark_v2.theme" \
         "$HOME/.config/fastfetch/config.jsonc" \
         "$HOME/.config/fastfetch/claude.txt" \
+        "$HOME/.config/nvim/init.lua" \
+        "$HOME/.config/nvim/lazy-lock.json" \
         "$HOME/.config/fontconfig/conf.d/65-noto-kufi-arabic.conf" \
         "$HOME/.local/share/icons/Bibata-Modern-Amber/index.theme" \
         "$HOME/.local/share/icons/Bibata-Modern-Amber/cursors/left_ptr" \

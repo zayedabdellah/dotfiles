@@ -383,7 +383,9 @@ assert_no_write_commands
 
 full_home="$TEST_ROOT/full-home"
 full_bin="$TEST_ROOT/full-bin"
-mkdir -p "$full_home"
+mkdir -p "$full_home/.config/nvim" "$full_home/nvim-link-target"
+printf '%s\n' 'preserve original symlink target' > "$full_home/nvim-link-target/init.lua"
+ln -s "$full_home/nvim-link-target/init.lua" "$full_home/.config/nvim/init.lua"
 make_mock_bin "$full_bin"
 make_mock_curl "$full_bin"
 make_mock_pacman "$full_bin"
@@ -421,6 +423,17 @@ arch_package_block="$(sed -n '/^ARCH_REQUIRED_PACKAGES=(/,/^)/p' "$ROOT/install.
 [[ "$(grep -oE '(^|[[:space:]])bluez-utils([[:space:]]|$)' <<<"$arch_package_block" | wc -l)" == 1 ]]
 ! grep -qE '(^|[[:space:]])unzip([[:space:]]|$)' <<<"$arch_package_block"
 [[ -x "$full_home/.local/bin/oh-my-posh" ]]
+[[ -f "$full_home/.config/nvim/init.lua" ]]
+[[ ! -L "$full_home/.config/nvim/init.lua" ]]
+cmp -s "$ROOT/config/nvim/init.lua" "$full_home/.config/nvim/init.lua"
+[[ "$(cat "$full_home/nvim-link-target/init.lua")" == 'preserve original symlink target' ]]
+full_manifest="$(find "$full_home/.local/state/dotfiles/backups" -name manifest.tsv -type f | sort | tail -1)"
+[[ -n "$full_manifest" ]]
+full_init_backup="$(awk -F '\t' -v source="$full_home/.config/nvim/init.lua" '$1 == source { print $2 }' "$full_manifest")"
+[[ -L "$full_init_backup" ]]
+[[ "$(readlink "$full_init_backup")" == "$full_home/nvim-link-target/init.lua" ]]
+[[ "$(cat "$full_init_backup")" == 'preserve original symlink target' ]]
+[[ -f "$full_home/.config/nvim/lazy-lock.json" ]]
 [[ "$(grep -c '^curl ' "$TEST_ROOT/commands.log")" == 2 ]]
 grep -q '^curl https://github.com/JanDeDobbeleer/oh-my-posh/releases/download/v29.31.1/posh-linux-amd64$' "$TEST_ROOT/commands.log"
 grep -q '^curl https://github.com/JanDeDobbeleer/oh-my-posh/releases/download/v29.31.1/checksums.txt$' "$TEST_ROOT/commands.log"
