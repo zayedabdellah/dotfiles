@@ -43,6 +43,16 @@ hl.window_rule({
     pseudo = false,
 })
 
+-- MPV's scripts/hyprland-pseudotile.lua supplies the video's display ratio.
+-- Hyprland 0.56 initializes tiled pseudo sizes from layout geometry, not autofit.
+-- After the fullscreen rule: pseudo geometry is bypassed while fullscreen.
+hl.window_rule({
+    name  = "mpv-pseudotile",
+    match = { class = "^mpv$", float = false },
+
+    pseudo = true,
+})
+
 -- Thunar File Chooser & Dialog Rules
 hl.window_rule({
     name  = "thunar-file-dialogs",
